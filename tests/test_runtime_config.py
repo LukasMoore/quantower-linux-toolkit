@@ -1,5 +1,6 @@
 """Validate portable configuration and argv/environment boundaries without Wine."""
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -13,6 +14,13 @@ import runtime_config
 
 
 class ConfigurationTests(unittest.TestCase):
+    def test_private_wayland_socket_limit_counts_encoded_path_bytes(self):
+        runtime_config.validate_gpu_runtime_path('/tmp/short target')
+        with self.assertRaisesRegex(ValueError, 'shorter target'):
+            runtime_config.validate_gpu_runtime_path('/tmp/' + 'a' * 100)
+        with self.assertRaisesRegex(ValueError, 'shorter target'):
+            runtime_config.validate_gpu_runtime_path('/tmp/' + 'é' * 60)
+
     def test_defaults_select_no_specific_gpu_or_physical_output(self):
         with tempfile.TemporaryDirectory() as directory:
             config = runtime_config.load(directory, {})
@@ -148,12 +156,27 @@ class RenderCommandTests(unittest.TestCase):
         self.assertEqual(runtime_config.selected_x11(self.base, {}), 'private')
         self.assertEqual(runtime_config.selected_x11(self.base, {'QUANTOWER_X11_RUNTIME': 'system'}), 'system')
 
+    def test_private_dependency_closure_is_scoped_to_wine_and_setup(self):
+        wine_lib = self.base / 'runner-quantower/opt/wine-devel/lib'
+        wine_lib.mkdir(parents=True)
+        environment = dict(self.environment, LD_LIBRARY_PATH='/untrusted/inherited', PATH='/usr/bin')
+        runtime_config.apply_wine_library_environment(self.base, environment, 'system')
+        self.assertEqual(environment['LD_LIBRARY_PATH'], str(wine_lib))
+        self.assertTrue(environment['PATH'].startswith(str(wine_lib.parent / 'bin') + ':'))
+        launch = runtime_config.build_render_launch(self.base, runtime_config.RuntimeConfig(), self.environment)
+        self.assertEqual(launch.environment['LD_LIBRARY_PATH'], str(self.base / 'gamescope/files/lib'))
+        self.assertIn('LD_LIBRARY_PATH=' + str(wine_lib), launch.arguments)
+        self.assertNotIn('/untrusted/inherited', ' '.join(launch.arguments))
+        self.assertEqual(runtime_config.wine_library_directories(self.base, 'private'),
+                         [self.base / 'runtime-components/x11', wine_lib])
+
     def test_host_audio_override_is_preserved_without_copying_credentials(self):
         environment = dict(self.environment, PULSE_SERVER='unix:/host/custom pulse', PIPEWIRE_RUNTIME_DIR='/host/pw')
         launch = runtime_config.build_render_launch(self.base, runtime_config.RuntimeConfig(), environment)
         self.assertEqual(launch.environment['PULSE_SERVER'], 'unix:/host/custom pulse')
         self.assertEqual(launch.environment['PIPEWIRE_RUNTIME_DIR'], '/host/pw')
         self.assertEqual(launch.environment['XDG_RUNTIME_DIR'], str(self.base / 'runtime/gpu'))
+        self.assertEqual(launch.environment['PATH'].split(os.pathsep)[0], str(self.base / 'gamescope/files/bin'))
 
 
 class DoctorTests(unittest.TestCase):

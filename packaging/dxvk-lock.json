@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "component": "DXVK",
+  "version": "3.1.1",
+  "license": "Zlib",
+  "upstream_commit": "b1a1c99ab52b687cf950d62c88bc2fa316b41663",
+  "binary_archive": {
+    "url": "https://github.com/doitsujin/dxvk/releases/download/v3.1.1/dxvk-3.1.1.tar.gz",
+    "filename": "dxvk-3.1.1.tar.gz",
+    "bytes": 18041512,
+    "sha256": "40565b4a724aadc4433fa4e010b4b23916d9b1f1baeee64e17186db94f54e608"
+  },
+  "source_archive": {
+    "url": "https://codeload.github.com/doitsujin/dxvk/tar.gz/b1a1c99ab52b687cf950d62c88bc2fa316b41663",
+    "filename": "dxvk-3.1.1-source.tar.gz",
+    "root": "dxvk-b1a1c99ab52b687cf950d62c88bc2fa316b41663",
+    "sha256": "6aec835e60bc1af6102556a99f8e962068701b6051aaaffa5aa4c2aecc9aa4c3"
+  },
+  "selected_files": [
+    {
+      "archive_path": "dxvk-3.1.1/x64/d3d9.dll",
+      "bundle_path": "payload/dxvk/x64/d3d9.dll",
+      "sha256": "c126316f7478eaff1ad8087702eda5930f2400187b9c8b3592219c34f6632780",
+      "architecture": "x86_64-windows"
+    }
+  ],
+  "notice_files": [
+    {
+      "path": "dxvk/LICENSE",
+      "archive": "dxvk-3.1.1-source.tar.gz",
+      "member": "dxvk-b1a1c99ab52b687cf950d62c88bc2fa316b41663/LICENSE",
+      "sha256": "a5cb1a6ded7d2d7e92d550ba28edd21be2d1d4044662b399887351023e30ce64"
+    },
+    {
+      "path": "dxvk/include/openvr/LICENSE",
+      "archive": "dxvk-3.1.1-source.tar.gz",
+      "member": "dxvk-b1a1c99ab52b687cf950d62c88bc2fa316b41663/include/openvr/LICENSE",
+      "sha256": "db64bcf32be090ca9d1ea7e3df5541a07f4cf5729206b44e57a1182f05554f3f"
+    },
+    {
+      "path": "dxvk/submodules/include/native/directx/COPYING.MinGW-w64.txt",
+      "archive": "dxvk-submodule-include-native-directx-9df86f2341616ef1888ae59919feaa6d4fad693d.tar.gz",
+      "member": "mingw-directx-headers-9df86f2341616ef1888ae59919feaa6d4fad693d/COPYING.MinGW-w64.txt",
+      "sha256": "f38e6194bd3bfa1b654f118e5acefe0aead437bbe669eee43957ccc65a7127f1"
+    },
+    {
+      "path": "dxvk/submodules/include/vulkan/LICENSE.md",
+      "archive": "dxvk-submodule-include-vulkan-8864cdc896bbc2a9b6eb36b3218fc9ef57908d77.tar.gz",
+      "member": "Vulkan-Headers-8864cdc896bbc2a9b6eb36b3218fc9ef57908d77/LICENSE.md",
+      "sha256": "ac24e5ea920e4318e4d02c4086ae51f53cfb03feed06c18df1019e7ada1ec7bc"
+    },
+    {
+      "path": "dxvk/submodules/include/spirv/LICENSE",
+      "archive": "dxvk-submodule-include-spirv-04f10f650d514df88b76d25e83db360142c7b174.tar.gz",
+      "member": "SPIRV-Headers-04f10f650d514df88b76d25e83db360142c7b174/LICENSE",
+      "sha256": "ea43b1de38a6f90c488800d66dec1ed671e68cda530266bc96951fb5b6307613"
+    },
+    {
+      "path": "dxvk/submodules/subprojects/libdisplay-info/LICENSE",
+      "archive": "dxvk-submodule-subprojects-libdisplay-info-275e6459c7ab1ddd4b125f28d0440716e4888078.tar.gz",
+      "member": "libdisplay-info-275e6459c7ab1ddd4b125f28d0440716e4888078/LICENSE",
+      "sha256": "15b396244e58830c5614b9394f4deccfe684970cd507f299383ab57ad339eedd"
+    },
+    {
+      "path": "dxvk/submodules/subprojects/libdisplay-info/test/data/LICENSE.CC-BY-4.0",
+      "archive": "dxvk-submodule-subprojects-libdisplay-info-275e6459c7ab1ddd4b125f28d0440716e4888078.tar.gz",
+      "member": "libdisplay-info-275e6459c7ab1ddd4b125f28d0440716e4888078/test/data/LICENSE.CC-BY-4.0",
+      "sha256": "4014722237c90b6f8effc35b6e04a47815c03ef14ee24683d6c1dfd0b9b644d0"
+    },
+    {
+      "path": "dxvk/submodules/subprojects/dxbc-spirv/LICENSE",
+      "archive": "dxvk-submodule-subprojects-dxbc-spirv-bf14419e5fa7eacb817b7b632f03cb61d61bbad7.tar.gz",
+      "member": "dxbc-spirv-bf14419e5fa7eacb817b7b632f03cb61d61bbad7/LICENSE",
+      "sha256": "0f8a5e687bea942a30a8e39b9915294fbe44eca866e71307a9b7083ee0e69ad8"
+    },
+    {
+      "path": "dxvk/submodules/subprojects/dxbc-spirv/submodules/spirv_headers/LICENSE",
+      "archive": "dxvk-submodule-subprojects-dxbc-spirv-submodules-spirv_headers-c8ad050fcb29e42a2f57d9f59e97488f465c436d.tar.gz",
+      "member": "SPIRV-Headers-c8ad050fcb29e42a2f57d9f59e97488f465c436d/LICENSE",
+      "sha256": "ea43b1de38a6f90c488800d66dec1ed671e68cda530266bc96951fb5b6307613"
+    }
+  ],
+  "scope": "Official unmodified upstream x64 d3d9.dll only; no application assets, prefix or vendor installers.",
+  "extra_sources": [
+    {
+      "url": "https://codeload.github.com/Joshua-Ashton/mingw-directx-headers/tar.gz/9df86f2341616ef1888ae59919feaa6d4fad693d",
+      "filename": "dxvk-submodule-include-native-directx-9df86f2341616ef1888ae59919feaa6d4fad693d.tar.gz",
+      "root": "mingw-directx-headers-9df86f2341616ef1888ae59919feaa6d4fad693d",
+      "sha256": "9c1b8bbfd2d6c758fac4d93c2808a46bc1eee429fe656b4f21b29e02615aa8aa",
+      "repository": "Joshua-Ashton/mingw-directx-headers",
+      "commit": "9df86f2341616ef1888ae59919feaa6d4fad693d",
+      "destination": "include/native/directx"
+    },
+    {
+      "url": "https://codeload.github.com/KhronosGroup/Vulkan-Headers/tar.gz/8864cdc896bbc2a9b6eb36b3218fc9ef57908d77",
+      "filename": "dxvk-submodule-include-vulkan-8864cdc896bbc2a9b6eb36b3218fc9ef57908d77.tar.gz",
+      "root": "Vulkan-Headers-8864cdc896bbc2a9b6eb36b3218fc9ef57908d77",
+      "sha256": "35824117f649befc664a12622bc801eddbba036ac03d906db400ee1c1e7903e9",
+      "repository": "KhronosGroup/Vulkan-Headers",
+      "commit": "8864cdc896bbc2a9b6eb36b3218fc9ef57908d77",
+      "destination": "include/vulkan"
+    },
+    {
+      "url": "https://codeload.github.com/KhronosGroup/SPIRV-Headers/tar.gz/04f10f650d514df88b76d25e83db360142c7b174",
+      "filename": "dxvk-submodule-include-spirv-04f10f650d514df88b76d25e83db360142c7b174.tar.gz",
+      "root": "SPIRV-Headers-04f10f650d514df88b76d25e83db360142c7b174",
+      "sha256": "1b220e3eec1714f0451b0e3652979bd280edf10893f617837b88e6359a804ded",
+      "repository": "KhronosGroup/SPIRV-Headers",
+      "commit": "04f10f650d514df88b76d25e83db360142c7b174",
+      "destination": "include/spirv"
+    },
+    {
+      "url": "https://codeload.github.com/doitsujin/libdisplay-info/tar.gz/275e6459c7ab1ddd4b125f28d0440716e4888078",
+      "filename": "dxvk-submodule-subprojects-libdisplay-info-275e6459c7ab1ddd4b125f28d0440716e4888078.tar.gz",
+      "root": "libdisplay-info-275e6459c7ab1ddd4b125f28d0440716e4888078",
+      "sha256": "c83c3e600f90a3ac98932e9259de62ad8ad3a65dd5efb1d2abcb1e4d1c8f494a",
+      "repository": "doitsujin/libdisplay-info",
+      "commit": "275e6459c7ab1ddd4b125f28d0440716e4888078",
+      "destination": "subprojects/libdisplay-info"
+    },
+    {
+      "url": "https://codeload.github.com/doitsujin/dxbc-spirv/tar.gz/bf14419e5fa7eacb817b7b632f03cb61d61bbad7",
+      "filename": "dxvk-submodule-subprojects-dxbc-spirv-bf14419e5fa7eacb817b7b632f03cb61d61bbad7.tar.gz",
+      "root": "dxbc-spirv-bf14419e5fa7eacb817b7b632f03cb61d61bbad7",
+      "sha256": "7a2bd35d2a2186f5f77137c00302b0d9364ac01017e8ae41e30f61850d7cc2f4",
+      "repository": "doitsujin/dxbc-spirv",
+      "commit": "bf14419e5fa7eacb817b7b632f03cb61d61bbad7",
+      "destination": "subprojects/dxbc-spirv"
+    },
+    {
+      "url": "https://codeload.github.com/KhronosGroup/SPIRV-Headers/tar.gz/c8ad050fcb29e42a2f57d9f59e97488f465c436d",
+      "filename": "dxvk-submodule-subprojects-dxbc-spirv-submodules-spirv_headers-c8ad050fcb29e42a2f57d9f59e97488f465c436d.tar.gz",
+      "root": "SPIRV-Headers-c8ad050fcb29e42a2f57d9f59e97488f465c436d",
+      "sha256": "5b6f38b430f1c68c7395c570053403da14eb4cecc7fcb4040e7a5248c2f63874",
+      "repository": "KhronosGroup/SPIRV-Headers",
+      "commit": "c8ad050fcb29e42a2f57d9f59e97488f465c436d",
+      "destination": "subprojects/dxbc-spirv/submodules/spirv_headers"
+    }
+  ]
+}

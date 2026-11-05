@@ -1,0 +1,14 @@
+# syntax=docker/dockerfile:1
+# Final builder layer used for Wine and the release's extraction/X11 helpers.
+# Deliberately preserve the two sequential steps used for the actual build;
+# package inventory and metadata hashes below include both layers.
+ARG TOOLKIT_BUILD_BASE=quantower-toolkit-builder:debian13-base-20261105
+FROM ${TOOLKIT_BUILD_BASE}
+USER root
+RUN apt-get install -y --no-install-recommends \
+    innoextract pax-utils x11-utils x11-xkb-utils libharfbuzz-dev libgcrypt20-dev
+RUN dpkg-query -W -f='${binary:Package}\t${Version}\t${source:Package}\t${source:Version}\n' \
+      > /opt/toolkit-build-info/packages.tsv && \
+    sha256sum /var/lib/apt/lists/*InRelease > /opt/toolkit-build-info/apt-metadata.sha256
+USER builder
+WORKDIR /work

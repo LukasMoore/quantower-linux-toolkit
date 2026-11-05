@@ -4,8 +4,9 @@ local authorization, paths and runtime history out of public commits.
 
 # Quantower Linux Toolkit maintenance
 
-This repository contains original launcher/diagnostic code and a source-only native
-patchset. Installation state is separate: a dedicated Wine prefix, user-obtained
+This repository contains original launcher/diagnostic code and a native source
+patchset. Optional runtime archives contain redistributable dependencies with
+matching notices and corresponding sources. Installation state is separate: a dedicated Wine prefix, user-obtained
 application/runtime files and generated manifests are local and excluded from Git.
 Read README.md for installation and THIRD_PARTY.md for licensing boundaries.
 
@@ -167,6 +168,24 @@ semicolons. Hooks are executable code inside the app and are never normal loggin
 defaults. Do not leave experimental observers or migration hooks enabled.
 
 ## Testing and public release
+
+Runtime bundles target Debian 13 x86-64 and keep host libc and graphics drivers
+outside the archive. Follow [docs/RUNTIME-BUNDLE.md](docs/RUNTIME-BUNDLE.md) and
+[docs/BUNDLE-LICENSING.md](docs/BUNDLE-LICENSING.md). Stage only newly built,
+relocatable runtime trees into a new directory. Every payload file and symlink
+needs component ownership, preserved notices and a verified matching source
+artifact before sealing. Publish the binary and source companions together.
+Keep Quantower, Windows installers, prefixes, accounts, logs and vendor assets
+out of both runtime and public source archives.
+
+`tools/setup.py` verifies the complete sealed bundle before importing its setup
+helpers. Its default and `--plan` operations must remain read-only; `--stage`
+must not execute Wine or download. Only explicit `--install` fetches pinned
+publisher inputs and creates a new prefix. Do not add an implicit launcher start.
+Post-install repairs must wait for complete guarded setup cleanup and acquire
+their own inactive-prefix lock. Preserve archive traversal, link-containment,
+checksum, restrictive-permission and no-overwrite tests. Synthetic tests do not
+replace a fresh-prefix application test of the exact packaged runtime.
 
 ```bash
 python3 -m unittest discover -s tests -v

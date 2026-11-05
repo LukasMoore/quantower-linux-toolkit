@@ -113,6 +113,26 @@ class RuntimeSourceTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             builder.extract_archive(archive, destination, 'upstream')
 
+    @unittest.skipUnless(shutil.which('make'), 'make is needed for the release-timestamp regression')
+    def test_release_timestamps_do_not_trigger_unavailable_autotools(self):
+        archive = self.root / 'release.tar.gz'
+        files = [('Makefile', b'all: aclocal.m4\n\t@echo prepared\naclocal.m4: configure.ac\n\t@false\n', 300),
+                 ('aclocal.m4', b'generated release input\n', 200),
+                 ('configure.ac', b'original older source\n', 100)]
+        # Archive order deliberately puts the older source last, reproducing the
+        # spurious regeneration when extraction assigns fresh timestamps.
+        with tarfile.open(archive, 'w:gz') as output:
+            for name, content, modified in files:
+                info = tarfile.TarInfo('upstream/' + name)
+                info.size, info.mtime, info.mode = len(content), modified, 0o644
+                output.addfile(info, io.BytesIO(content))
+        destination = self.root / 'release'
+        builder.extract_archive(archive, destination, 'upstream')
+        result = subprocess.run(['make', '--no-print-directory', 'all'], cwd=destination,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('prepared', result.stdout)
+
     def test_archive_traversal_links_devices_and_wrong_roots_are_rejected(self):
         cases = [('../escape', tarfile.REGTYPE, ''), ('upstream/../../escape', tarfile.REGTYPE, ''),
                  ('/absolute', tarfile.REGTYPE, ''), ('other/file', tarfile.REGTYPE, ''),

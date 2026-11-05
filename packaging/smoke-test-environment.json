@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "image_id": "sha256:9ee9caa92083bd9b55c5c69eea0a5d7a50c6c2bdc38059e8d756e84ee8538d7b",
+  "dockerfile": "packaging/Dockerfile.smoke-test",
+  "installed_package_count": 176,
+  "package_inventory_sha256": "52a132835a73f60f5918193858a911b06673b6257ae94ced39a2d48000251618",
+  "baseline_fixture": "Debian 13 + Python/Bash/glibc/graphics stack + Xvfb/system fonts/XKB/CA certificates; no Wine or compiler SDKs installed."
+}

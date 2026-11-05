@@ -16,6 +16,14 @@
       "digest": "337dacab1636219147b3fe75e451bf5b1c17bca2c86328266d40c4ad1ff0a1e8391c4746ca7a5b702b65b61e8bfe834566cfc1b548cc10aef90b441357b10b69",
       "source": "https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json",
       "license": "Microsoft runtime installer; downloaded locally, not redistributed by this repository."
+    },
+    "cef": {
+      "filename": "chromiumembeddedframework.runtime.win-x64.127.3.5.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/chromiumembeddedframework.runtime.win-x64/127.3.5/chromiumembeddedframework.runtime.win-x64.127.3.5.nupkg",
+      "algorithm": "sha256",
+      "digest": "2046e4b438f372c0f22fd8b2eccfbad00e192921ce57a732cc04afb48ecb4bf4",
+      "source": "https://www.nuget.org/packages/chromiumembeddedframework.runtime.win-x64/127.3.5",
+      "license": "CEF package downloaded privately; only missing resources matching the installed engine are restored. Not included in the runtime bundle."
     }
   }
 }

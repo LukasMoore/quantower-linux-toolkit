@@ -33,8 +33,10 @@ static void *worker(void *unused) {
         pthread_mutex_unlock(&live_mutex);
         XSetGraphicsExposures(dpy,gc,False);
         XSetSubwindowMode(dpy,gc,IncludeInferiors);
-        XFreeGC(dpy,gc);
         pthread_mutex_lock(&live_mutex);
+        /* Keep ID release and bookkeeping together. A valid allocator may
+         * immediately reuse a freed ID in another thread. */
+        XFreeGC(dpy,gc);
         live_ids[slot]=0;
         pthread_mutex_unlock(&live_mutex);
         if((i%10000)==0) { XFlush(dpy); atomic_fetch_add(&completed,10000); }
@@ -55,7 +57,7 @@ int main(int argc,char **argv) {
     for(int i=0;i<threads;i++) pthread_create(workers+i,NULL,worker,(void *)(unsigned long)i);
     for(int i=0;i<threads;i++) pthread_join(workers[i],NULL);
     XSync(dpy,False);
-    fprintf(stderr,"PASS total=%lu protocol_errors=%u duplicate_active_ids=%u\n",threads*count,errors,duplicate_ids);
+    fprintf(stderr,"%s total=%lu protocol_errors=%u duplicate_active_ids=%u\n",errors||duplicate_ids?"FAIL":"PASS",threads*count,errors,duplicate_ids);
     XCloseDisplay(dpy);
     return errors||duplicate_ids?1:0;
 }

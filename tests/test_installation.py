@@ -214,6 +214,34 @@ class InstallationTests(unittest.TestCase):
         self.assertTrue((self.target / 'logs/setup.raw.log').is_file())
         self.assertTrue((self.target / 'runtime-components/manifest.json').is_file())
 
+    def test_native_extract_validates_version_and_rejects_extracted_symlinks(self):
+        (self.target / 'prefix/drive_c').mkdir(parents=True)
+        def extract(command, **kwargs):
+            output = Path(command[command.index('--output-dir') + 1])
+            app = output / 'app/TradingPlatform/v1.147.5'
+            app.mkdir(parents=True)
+            (app / 'Starter.exe').write_bytes(b'synthetic executable')
+            self.assertEqual(command[1:3], ['--extract', '--silent'])
+            return mock.Mock(returncode=0)
+        with mock.patch.object(installer.subprocess, 'run', side_effect=extract):
+            result = installer.extract_application(self.target, {}, io.BytesIO(), '1.147.5')
+        self.assertEqual(result['exit_code'], 0)
+        destination = self.target / 'prefix/drive_c/AMPQuantowerInstalled'
+        self.assertTrue((destination / 'TradingPlatform/v1.147.5/Starter.exe').is_file())
+        with self.assertRaisesRegex(RuntimeError, 'must be new'):
+            installer.extract_application(self.target, {}, io.BytesIO(), '1.147.5')
+        import shutil
+        shutil.rmtree(destination)
+        def unsafe(command, **kwargs):
+            result = extract(command, **kwargs)
+            output = Path(command[command.index('--output-dir') + 1])
+            (output / 'app/escape').symlink_to(self.wine)
+            return result
+        with mock.patch.object(installer.subprocess, 'run', side_effect=unsafe):
+            with self.assertRaisesRegex(RuntimeError, 'link or special'):
+                installer.extract_application(self.target, {}, io.BytesIO(), '1.147.5')
+        self.assertFalse(destination.exists())
+
 
 class FetchTests(unittest.TestCase):
     def setUp(self):

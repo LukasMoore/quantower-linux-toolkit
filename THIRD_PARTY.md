@@ -9,8 +9,10 @@ proprietary applications, or separately installed runtime libraries.
 | Wine-derived patches and native source | LGPL-2.1-or-later where stated in upstream headers; preserve notices, modification history and the included license text |
 | gamescope-derived patches | BSD-2-Clause core, with additional BSD-3-Clause notices in the pinned upstream license |
 | X.Org libX11-derived patches | Upstream permissive notices; retain the complete pinned `COPYING` text |
-| DXVK, if supplied locally | Use the license of the exact runtime/fork obtained by the user; no DXVK binary is published here |
-| Quantower, Windows .NET Desktop Runtime and vendor fonts/artwork | User-obtained proprietary dependencies; no redistribution grant is made by this project |
+| DXVK | zlib license for the pinned upstream runtime; bundled releases include its notice and matching source identity |
+| innoextract | GPL-3.0-or-later; bundled releases include the exact Debian source package and its notices |
+| Other private userspace libraries and Xwayland | Exact versions, component licenses, notices and Debian source-package identities are recorded in each runtime bundle |
+| Quantower, Windows .NET Desktop Runtime installers and vendor fonts/artwork | Obtained separately from their publishers under applicable terms; these files are excluded from runtime and source bundles |
 
 Pinned source identities and patch paths are in `runtime-lock.json`. Notices and
 license texts are kept with the public native patchset under `third_party/`.
@@ -19,8 +21,18 @@ identify local changes; do not describe local patches as accepted upstream.
 
 If distributing modified runtime binaries separately, satisfy the actual component
 license's source, notice and redistribution conditions for the exact build. The
-source-only repository is not a complete corresponding-source offer for an
+source repository alone is not a complete corresponding-source offer for an
 unrelated binary or an earlier private custom runtime.
+
+Versioned runtime archives carry `licenses/manifest.json`, preserved component
+notices and `source-offer.json`. These record the exact payload owners, source
+artifact hashes and the companion source archive's name, hash and download URL.
+The matching source companion includes the original source archives, local
+patches and build recipes for the distributed build, including relevant Debian
+source packages. Publish that companion alongside every binary release and
+preserve its availability. See [the bundle licensing workflow](docs/BUNDLE-LICENSING.md).
+The packager checks inventory and source bytes; it does not determine whether a
+new dependency's licensing conditions have been fully satisfied.
 
 Primary references:
 

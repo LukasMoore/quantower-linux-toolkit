@@ -8,8 +8,10 @@ Review the source and test it yourself in an isolated demo environment on your o
 hardware before trusting it with accounts, data or live trading. This experimental
 release has not established production readiness.
 
-An experimental source-only launcher, diagnostics suite and native compatibility
-patchset for running a user-obtained Quantower installation through Wine on Linux.
+An experimental launcher, diagnostics suite and native compatibility patchset for
+running a user-obtained Quantower installation through Wine on Linux. The Git
+repository contains source; a versioned Debian runtime bundle can also package
+the redistributable dependencies with matching notices and source archives.
 The toolkit keeps each installation in a dedicated prefix, records bounded local
 logs, and verifies process ownership before cleanup.
 
@@ -57,6 +59,23 @@ No command installs system packages or changes a host GPU driver.
 
 ## Set up a new installation
 
+For a prebuilt Debian 13 x86-64 runtime bundle, verify the release archive's
+published SHA256, extract it, then run this inside the extracted directory:
+
+```bash
+./setup.sh --plan
+./setup.sh --target "$HOME/.local/share/quantower-linux" --install
+```
+
+The first command only verifies and reports a plan. The explicit `--install`
+operation uses bundled Wine, gamescope, Xlib and DXVK, downloads the pinned
+publisher installers separately, and creates a new isolated installation.
+Debian 13, glibc 2.41 or newer, Python 3.11 or newer and a graphical session are
+required. Host graphics drivers remain a host prerequisite. Other systems need
+their own validation. Read [the bundle setup and packaging guide](docs/RUNTIME-BUNDLE.md)
+for profile selection, offline staging, corresponding sources and testing limits.
+
+For a source checkout, supply or build the runtime components as follows.
 Keep the checkout separate from installed state. Use a **new** target directory;
 the installer refuses to overwrite an existing installation.
 

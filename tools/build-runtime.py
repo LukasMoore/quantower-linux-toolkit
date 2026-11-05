@@ -130,6 +130,7 @@ def extract_archive(archive, destination, root_name):
             seen.add(name)
             paths.append((member, relative.parts[1:]))
         destination.mkdir(parents=True)
+        directories = []
         try:
             for member, parts in paths:
                 if not parts:
@@ -139,11 +140,19 @@ def extract_archive(archive, destination, root_name):
                 target = destination.joinpath(*parts)
                 if member.isdir():
                     target.mkdir(parents=True, exist_ok=True)
+                    directories.append((target, member.mtime))
                 else:
                     target.parent.mkdir(parents=True, exist_ok=True)
                     with source.extractfile(member) as stream, target.open('xb') as output:
                         shutil.copyfileobj(stream, output)
                     os.chmod(target, member.mode & 0o777)
+                    # Release tarballs deliberately keep generated configure/
+                    # aclocal files newer than their inputs. Resetting every
+                    # timestamp can accidentally demand an unavailable, newer
+                    # autotools version on an otherwise valid release build.
+                    os.utime(target, (member.mtime, member.mtime), follow_symlinks=False)
+            for target, modified in reversed(directories):
+                os.utime(target, (modified, modified), follow_symlinks=False)
         except BaseException:
             shutil.rmtree(destination)
             raise
@@ -227,7 +236,7 @@ def build_component(name, source, work, jobs, log):
     if name == 'wine':
         # Modern WoW64 uses a 64-bit Unix host with both 32/64-bit PE modules.
         # --enable-win64 alone cannot execute common PE32 installer bootstraps.
-        run([source / 'configure', '--prefix=/opt/wine-devel', '--enable-archs=i386,x86_64', '--without-wayland'], build, log)
+        run([source / 'configure', '--prefix=/opt/wine-devel', '--enable-archs=i386,x86_64', '--without-wayland', '--disable-tests'], build, log)
         run(['make', '-j', jobs], build, log)
         run(['make', 'install', 'DESTDIR=' + str(stage)], build, log)
     elif name == 'x11':

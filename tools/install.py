@@ -97,8 +97,14 @@ def validate(args):
             raise ValueError('Wine home must contain executable bin/wine and bin/wineserver.')
     if args.profile == 'gpu' and (not args.gamescope_home or not args.dxvk_d3d9):
         raise ValueError('GPU profile requires both --gamescope-home and --dxvk-d3d9.')
+    if args.profile == 'gpu':
+        runtime_config.validate_gpu_runtime_path(target)
     if args.run_installers and not args.initialize_prefix:
         raise ValueError('--run-installers requires --initialize-prefix for this new installation.')
+    if args.extract_app and not args.run_installers:
+        raise ValueError('--extract-app requires --run-installers.')
+    if args.extract_app and not (wine / 'bin/innoextract').is_file():
+        raise ValueError('--extract-app requires bundled bin/innoextract.')
     app = installer_pin(args.app_installer, args.app_installer_sha256)
     desktop = installer_pin(args.desktop_runtime_installer, args.desktop_runtime_sha256)
     if args.run_installers and (app is None or desktop is None):
@@ -147,6 +153,7 @@ def assemble(args):
         helpers = temporary / 'tools'
         helpers.mkdir(mode=0o700)
         shutil.copy2(ROOT / 'tools/isolate-icon-fonts.py', helpers / 'isolate-icon-fonts.py')
+        shutil.copy2(ROOT / 'tools/restore-cef-resources.py', helpers / 'restore-cef-resources.py')
         if (ROOT / 'third_party').is_dir():
             copy_tree(ROOT / 'third_party', temporary / 'third_party')
         for name in ('launch.sh', 'render-launch.sh'):
@@ -168,12 +175,33 @@ def assemble(args):
                          'lib/wine/x86_64-windows/gdi32.dll', 'lib/wine/x86_64-windows/explorer.exe'):
             if (bundle / relative).is_file():
                 pin(bundle / relative)
+        # Runtime bundles include dlopen dependencies and native setup helpers.
+        # Check all their ELF bytes at startup as well as the selected PE modules.
+        for file in bundle.rglob('*'):
+            if file.is_file():
+                with file.open('rb') as stream:
+                    if stream.read(4) == b'\x7fELF':
+                        pin(file)
         if extras['x11_home']:
             directory = components / 'x11'
             directory.mkdir(mode=0o700)
             for name in ('libX11.so.6', 'libX11-xcb.so.1'):
                 shutil.copy2(find_x11(extras['x11_home'], name), directory / name)
                 pin(directory / name)
+            # Include the private X11 ELF closure, not just its public entry points.
+            for file in (extras['x11_home'] / 'lib').glob('*'):
+                if file.is_file():
+                    with file.open('rb') as stream:
+                        if stream.read(4) != b'\x7fELF':
+                            continue
+                    installed = directory / file.name
+                    if installed.exists() and sha(installed) != sha(file):
+                        raise ValueError('Conflicting private X11 library: ' + file.name)
+                    shutil.copy2(file, installed)
+                    pin(installed)
+            locale_data = extras['x11_home'] / 'share/X11'
+            if locale_data.is_dir():
+                copy_tree(locale_data, directory / 'share/X11')
         if extras['gamescope_home']:
             home = extras['gamescope_home']
             # Accept standard --prefix=/usr staged builds or a ready runtime prefix.
@@ -200,6 +228,11 @@ def assemble(args):
                 shutil.copy2(found, xwayland)
             pin(installed)
             pin(xwayland)
+            for file in directory.rglob('*'):
+                if file.is_file():
+                    with file.open('rb') as stream:
+                        if stream.read(4) == b'\x7fELF':
+                            pin(file)
         for source_key, name in (('dxvk_d3d9', 'd3d9.dll'), ('assert_trace', 'libquantower_assert_trace.so')):
             if extras[source_key]:
                 shutil.copy2(extras[source_key], components / name)
@@ -250,19 +283,47 @@ def assemble(args):
               'installers_executed': False, 'runtime_hash_verification': 'PASS'}
     try:
         if args.initialize_prefix:
-            result.update(initialize(target, args.run_installers, setup_lock=setup_lock))
+            options = {'extract_app': True} if args.extract_app else {}
+            result.update(initialize(target, args.run_installers, setup_lock=setup_lock, **options))
         return result
     finally:
         if setup_lock is not None:
             setup_lock.close()
 
 
-def initialize(target, run_installers=False, *, setup_lock=None):
+def extract_application(target, env, stream, application):
+    """Extract only installer app payload, without executing Inno's autorun hooks."""
+    destination = target / 'prefix/drive_c/AMPQuantowerInstalled'
+    if destination.exists() or destination.is_symlink():
+        raise RuntimeError('Application extraction destination must be new.')
+    extractor = target / 'runner-quantower/opt/wine-devel/bin/innoextract'
+    with tempfile.TemporaryDirectory(prefix='.app-extract-', dir=target) as directory:
+        output = Path(directory)
+        result = subprocess.run([str(extractor), '--extract', '--silent', '--output-dir', str(output),
+                                 str(target / 'installers/Quantower.exe')], env=env, cwd=target,
+                                stdin=subprocess.DEVNULL, stdout=stream, stderr=subprocess.STDOUT,
+                                timeout=900, check=False)
+        if result.returncode:
+            raise RuntimeError('Native application extraction failed; inspect logs/setup.raw.log.')
+        app = output / 'app'
+        if not app.is_dir() or app.is_symlink():
+            raise RuntimeError('Installer did not contain the expected app payload.')
+        # Installer inputs are pinned, but still reject extracted links/special files.
+        for entry in app.rglob('*'):
+            if entry.is_symlink() or not (entry.is_dir() or entry.is_file()):
+                raise RuntimeError('Application payload contains a link or special file.')
+        if not (app / 'TradingPlatform' / ('v' + application) / 'Starter.exe').is_file():
+            raise RuntimeError('Installer payload does not match the selected application version.')
+        shutil.copytree(app, destination)
+    return {'step': 'native application extraction', 'exit_code': result.returncode}
+
+
+def initialize(target, run_installers=False, *, setup_lock=None, extract_app=False):
     """Run only explicitly requested setup in the new prefix, retaining ownership guards."""
     if setup_lock is None:
         with (target / 'logs/launch.lock').open('a') as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return initialize(target, run_installers, setup_lock=lock)
+            return initialize(target, run_installers, setup_lock=lock, extract_app=extract_app)
     expected = (target / 'logs/launch.lock').stat()
     actual = os.fstat(setup_lock.fileno())
     if (expected.st_dev, expected.st_ino) != (actual.st_dev, actual.st_ino):
@@ -279,6 +340,7 @@ def initialize(target, run_installers=False, *, setup_lock=None):
         env.pop(name, None)
     env.update(WINEPREFIX=str(target / 'prefix'), WINEARCH='win64', WINEDEBUG='-all,err+all,warn+all',
                WINEDLLOVERRIDES='winemenubuilder.exe=d', QUANTOWER_LAUNCH_SESSION=session.token)
+    runtime_config.apply_wine_library_environment(target, env)
     wine = target / 'runner-quantower/opt/wine-devel/bin/wine'
     records = []
     with (target / 'logs/setup.raw.log').open('xb') as stream:
@@ -312,9 +374,12 @@ def initialize(target, run_installers=False, *, setup_lock=None):
                     not any((dotnet / 'shared/Microsoft.WindowsDesktop.App').glob('*/PresentationFramework.dll')) or
                     not any((dotnet / 'shared/Microsoft.NETCore.App').glob('*/System.Private.CoreLib.dll'))):
                 raise RuntimeError('The expected x64 .NET Desktop Runtime was not installed; inspect logs/setup.raw.log.')
-            print('In the Quantower extractor choose C:\\AMPQuantowerInstalled. Exit the new app when finished, then use launch.sh.', file=sys.stderr)
-            execute(['Z:' + str(target / 'installers/Quantower.exe').replace('/', '\\')], 'Quantower extractor', 3600)
             application = json.loads((target / 'application-version.json').read_text())['application_version']
+            if extract_app:
+                records.append(extract_application(target, env, stream, application))
+            else:
+                print('In the Quantower extractor choose C:\\AMPQuantowerInstalled. Exit the new app when finished, then use launch.sh.', file=sys.stderr)
+                execute(['Z:' + str(target / 'installers/Quantower.exe').replace('/', '\\')], 'Quantower extractor', 3600)
             executable = target / 'prefix/drive_c/AMPQuantowerInstalled/TradingPlatform' / ('v' + application) / 'Starter.exe'
             if not executable.is_file():
                 raise RuntimeError('Selected Starter.exe is absent. Check the extraction folder/version before launching.')
@@ -348,6 +413,7 @@ def parser():
     p.add_argument('--desktop-runtime-sha256')
     p.add_argument('--initialize-prefix', action='store_true')
     p.add_argument('--run-installers', action='store_true')
+    p.add_argument('--extract-app', action='store_true', help='Use bundled innoextract for the pinned app payload without installer autorun hooks.')
     p.add_argument('--plan', action='store_true', help='Validate inputs and print the installation plan without writes or execution.')
     return p
 

@@ -11,7 +11,7 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_BYTES = 2 * 1024 ** 3
-ALLOWED_HOSTS = {'updates.quantower.com', 'builds.dotnet.microsoft.com'}
+ALLOWED_HOSTS = {'updates.quantower.com', 'builds.dotnet.microsoft.com', 'api.nuget.org', 'globalcdn.nuget.org'}
 
 
 def checked_url(url):
@@ -91,7 +91,7 @@ def fetch(item, cache, opener=open_official):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cache', required=True, type=Path)
-    parser.add_argument('--only', choices=('amp', 'desktop', 'all'), default='all')
+    parser.add_argument('--only', choices=('amp', 'desktop', 'cef', 'all'), default='all')
     args = parser.parse_args(argv)
     os.umask(0o077)
     lock = json.loads((ROOT / 'installer-lock.json').read_text())

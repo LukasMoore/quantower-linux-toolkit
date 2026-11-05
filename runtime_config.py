@@ -140,6 +140,43 @@ def selected_x11(base, environment=None):
     return explicit or ('private' if available else 'system')
 
 
+def wine_library_directories(base, x11):
+    """Keep Wine's bundled userspace closure separate from the compositor's."""
+    base = Path(base).resolve()
+    paths = []
+    if x11 == 'private':
+        paths.append(base / 'runtime-components/x11')
+    directory = base / 'runner-quantower/opt/wine-devel/lib'
+    if directory.is_dir():
+        paths.append(directory)
+    if any(os.pathsep in str(path) or any(ord(c) < 32 for c in str(path)) for path in paths):
+        raise ValueError('Runtime paths cannot contain loader separators or control characters.')
+    return paths
+
+
+def validate_gpu_runtime_path(base):
+    """Wayland uses Linux sockaddr_un: at most 107 path bytes plus NUL."""
+    socket = Path(base).resolve() / 'runtime/gpu/gamescope-0'
+    if len(os.fsencode(socket)) > 107:
+        raise ValueError('Installation path is too long for private Wayland sockets; choose a shorter target directory.')
+
+
+def apply_wine_library_environment(base, environment, x11=None):
+    if x11 is None:
+        x11 = selected_x11(base, environment)
+    paths = wine_library_directories(base, x11)
+    environment.pop('LD_LIBRARY_PATH', None)
+    if paths:
+        environment['LD_LIBRARY_PATH'] = os.pathsep.join(map(str, paths))
+    environment.pop('XLOCALEDIR', None)
+    locale_data = Path(base) / 'runtime-components/x11/share/X11/locale'
+    if x11 == 'private' and locale_data.is_dir():
+        environment['XLOCALEDIR'] = str(locale_data)
+    helpers = Path(base).resolve() / 'runner-quantower/opt/wine-devel/bin'
+    environment['PATH'] = str(helpers) + os.pathsep + environment.get('PATH', os.defpath)
+    return x11
+
+
 @dataclass
 class RenderLaunch:
     arguments: list[str]
@@ -168,6 +205,7 @@ def build_render_launch(base, config, environment=None):
     gamescope = base / 'gamescope/files'
     runner = base / 'runner-quantower/opt/wine-devel/bin'
     gpu_runtime = base / 'runtime/gpu'
+    validate_gpu_runtime_path(base)
     dxvk_log = Path(original.get('DXVK_LOG_PATH', str(base / 'logs/gpu')))
     dxvk_cache = base / 'cache/gpu/dxvk'
     shader_cache = base / 'cache/gpu/shaders'
@@ -189,6 +227,7 @@ def build_render_launch(base, config, environment=None):
         XDG_RUNTIME_DIR=str(gpu_runtime), XDG_CACHE_HOME=str(cache), XDG_CONFIG_HOME=str(user_config),
         __GL_SHADER_DISK_CACHE='1', __GL_SHADER_DISK_CACHE_PATH=str(shader_cache),
         WAYLAND_DISPLAY=wayland_socket, LD_LIBRARY_PATH=str(gamescope / 'lib'),
+        PATH=str(gamescope / 'bin') + os.pathsep + original.get('PATH', os.defpath),
         WLR_XWAYLAND=str(gamescope / 'bin/Xwayland'),
         GAMESCOPE_SCRIPT_PATH=str(gamescope / 'share/gamescope/scripts'))
     if config.gpu_device_filter is not None:
@@ -204,8 +243,13 @@ def build_render_launch(base, config, environment=None):
         command.extend(['-W', str(config.output_width), '-H', str(config.output_height)])
     command.extend(['-r', str(config.refresh_hz), '-o', str(config.idle_refresh_hz), '-S', 'fit', '-F', 'linear'])
     command.extend(['--', '/usr/bin/env', '-u', 'LD_LIBRARY_PATH', '-u', 'WLR_XWAYLAND', '-u', 'GAMESCOPE_SCRIPT_PATH'])
-    if x11 == 'private':
-        command.append('LD_LIBRARY_PATH=' + str(base / 'runtime-components/x11'))
+    wine_libraries = wine_library_directories(base, x11)
+    if wine_libraries:
+        command.append('LD_LIBRARY_PATH=' + os.pathsep.join(map(str, wine_libraries)))
+    locale_data = base / 'runtime-components/x11/share/X11/locale'
+    if x11 == 'private' and locale_data.is_dir():
+        command.append('XLOCALEDIR=' + str(locale_data))
+    command.append('PATH=' + str(runner) + os.pathsep + original.get('PATH', os.defpath))
     native_trace = declared_trace_library(base)
     directories = [dxvk_log, dxvk_cache, gpu_runtime, cache, user_config, shader_cache]
     private_directories = [gpu_runtime]

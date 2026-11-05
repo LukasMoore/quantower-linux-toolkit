@@ -71,9 +71,20 @@ def check_environment(base, *, source_only=False, environment=None):
     add('prefix', (base / 'prefix/user.reg').is_file(), 'A dedicated initialized 64-bit Wine prefix is required.')
     if mode == 'compatible':
         add('x11_display', bool(environment.get('DISPLAY')), 'Compatible profile requires a working DISPLAY connection.')
-        add('xwininfo', shutil.which('xwininfo') is not None, 'Compatible-profile visibility checks use xwininfo.')
+        helper = base / 'runner-quantower/opt/wine-devel/bin/xwininfo'
+        add('xwininfo', (helper.is_file() and os.access(helper, os.X_OK)) or shutil.which('xwininfo') is not None,
+            'Compatible-profile visibility checks use bundled or host xwininfo.')
     else:
+        try:
+            runtime_config.validate_gpu_runtime_path(base)
+            add('wayland_socket_path', True, 'Installation path fits private Wayland socket limits.')
+        except ValueError as error:
+            add('wayland_socket_path', False, str(error))
         gamescope = base / 'gamescope/files/bin'
+        add('xkb_compiler', Path('/usr/bin/xkbcomp').is_file(),
+            'Debian Xwayland invokes the host /usr/bin/xkbcomp (x11-xkb-utils).')
+        add('xkb_data', Path('/usr/share/X11/xkb/rules').is_dir(),
+            'Debian Xwayland requires host keyboard data (xkb-data).')
         for name in ('gamescope-brokey', 'Xwayland'):
             path = gamescope / name
             add(name, path.is_file() and os.access(path, os.X_OK), 'Dedicated compositor executable: ' + str(path))

@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "target": "debian13-x86_64",
+  "base_image": "debian:13-slim@sha256:7378260c0a098d27ac206225db5e7d92b8c7c84ea7afccc86eeb513756bbd392",
+  "builder_image_id": "sha256:5f3810e1bad5d2e7d034f36dad03fbd078016c7e4ddd299365cf9daaa3372bde",
+  "apt_sources": "Official signed Debian trixie/trixie-updates/trixie-security; snapshot backends unavailable, exact installed versions and metadata hashes retained.",
+  "binary_source_package_inventory_sha256": "65a7442878e37d628885365be8ef52c17f8faa457cd791424f09ec8ff1be3156",
+  "installed_package_count": 692,
+  "recipe_files": [
+    "packaging/Dockerfile.debian13",
+    "packaging/Dockerfile.debian13-tools"
+  ],
+  "ordered_build_commands": [
+    "docker build --platform linux/amd64 -f packaging/Dockerfile.debian13 -t quantower-toolkit-builder:debian13-base-20261105 .",
+    "docker build --platform linux/amd64 -f packaging/Dockerfile.debian13-tools -t quantower-toolkit-builder:debian13-20261105 ."
+  ],
+  "final_layer_additional_packages": [
+    "innoextract",
+    "pax-utils",
+    "x11-utils",
+    "x11-xkb-utils",
+    "libharfbuzz-dev",
+    "libgcrypt20-dev"
+  ],
+  "wine_configure_arguments": [
+    "--prefix=/opt/wine-devel",
+    "--enable-archs=i386,x86_64",
+    "--without-wayland",
+    "--disable-tests"
+  ],
+  "wine_compile_resources": {
+    "initial_jobs_and_cpus": 2,
+    "final_jobs_and_cpus": 4,
+    "final_nice": 19,
+    "memory_limit_gib": 5,
+    "memory_plus_swap_limit_gib": 7,
+    "pids_limit": 1024,
+    "resume_policy": "Only identity-verified isolated make was interrupted; captured in-progress targets were removed and rebuilt. Completed objects were retained."
+  }
+}

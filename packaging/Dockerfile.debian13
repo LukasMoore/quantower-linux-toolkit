@@ -1,0 +1,67 @@
+# syntax=docker/dockerfile:1
+# Build-only image: no application prefix, credentials or proprietary files.
+# This is the first of two recorded build steps. The final Wine builder also
+# requires Dockerfile.debian13-tools, which adds innoextract, pax-utils,
+# x11-utils, x11-xkb-utils, libharfbuzz-dev and libgcrypt20-dev. Use both steps
+# in packaging/build-environment.json; this base alone is not the release builder.
+FROM --platform=linux/amd64 debian:13-slim@sha256:7378260c0a098d27ac206225db5e7d92b8c7c84ea7afccc86eeb513756bbd392
+
+LABEL org.opencontainers.image.source="https://github.com/LukasMoore/quantower-linux-toolkit" \
+     org.quantower.toolkit.role="isolated-runtime-builder" \
+     org.quantower.toolkit.target="debian13-x86_64"
+
+ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 LC_ALL=C.UTF-8
+# Bootstrap CA trust from the image's signed official Debian repositories.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
+# Fixed base image; official signed Debian package repositories.
+# Snapshot pool/security backends were unavailable during preparation.
+# Exact binary/source package versions and authenticated metadata hashes are recorded;
+# the built image ID is the immutable build environment identity.
+RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/* && \
+    printf '%s\n' \
+     'Types: deb deb-src' \
+     'URIs: https://deb.debian.org/debian' \
+     'Suites: trixie trixie-updates' \
+     'Components: main' \
+     'Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg' \
+      '' \
+     'Types: deb deb-src' \
+     'URIs: https://security.debian.org/debian-security' \
+     'Suites: trixie-security' \
+     'Components: main' \
+     'Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg' \
+     > /etc/apt/sources.list.d/toolkit.sources && \
+    apt-get -o Acquire::Retries=5 update
+RUN apt-get install -y --no-install-recommends \
+    build-essential pkg-config python3 python3-pil python3-venv patch git curl file binutils \
+    bison flex clang lld mingw-w64 gcc-mingw-w64-i686 gcc-mingw-w64-x86-64 \
+    g++-mingw-w64-i686 g++-mingw-w64-x86-64 \
+    libfreetype-dev libfontconfig-dev libx11-dev libxext-dev libxrender-dev \
+    libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libxxf86vm-dev \
+    libvulkan-dev libgl-dev libgnutls28-dev libasound2-dev libpulse-dev \
+    libdbus-1-dev libudev-dev libunwind-dev libcups2-dev libpcap0.8-dev \
+    libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libjpeg-dev libpng-dev \
+    libtiff-dev libopenal-dev libsdl2-dev libkrb5-dev libusb-1.0-0-dev \
+    libsane-dev libgphoto2-dev libosmesa6-dev libv4l-dev \
+    libxcb1-dev xtrans-dev x11proto-dev xorg-sgml-doctools \
+    meson ninja-build cmake libpipewire-0.3-dev hwdata libwayland-dev \
+    wayland-protocols libdrm-dev libx11-xcb-dev libxdamage-dev libxcomposite-dev \
+    libxtst-dev libxres-dev libxmu-dev libxkbcommon-dev libcap-dev libpixman-1-dev \
+    liblcms2-dev libseat-dev libinput-dev libdisplay-info-dev libdecor-0-dev \
+    libeis-dev libxfixes-dev libxcb-composite0-dev libxcb-ewmh-dev \
+    libxcb-icccm4-dev libxcb-res0-dev libxcb-render-util0-dev glslang-tools \
+    libluajit-5.1-dev xwayland xvfb xauth x11-utils x11-xserver-utils \
+    mesa-utils vulkan-tools mesa-vulkan-drivers libgl1-mesa-dri dbus-x11 \
+    pulseaudio-utils pipewire-bin xfonts-base fonts-liberation2 fonts-dejavu-core \
+    cabextract unzip zstd patchelf
+RUN mkdir -p /opt/toolkit-build-info /builder-home && \
+    dpkg-query -W -f='${binary:Package}\t${Version}\t${source:Package}\t${source:Version}\n' \
+     > /opt/toolkit-build-info/packages.tsv && \
+    sha256sum /var/lib/apt/lists/*InRelease > /opt/toolkit-build-info/apt-metadata.sha256 && \
+    cp /etc/apt/sources.list.d/toolkit.sources /opt/toolkit-build-info/ && \
+    groupadd --gid 1000 builder && \
+    useradd --uid 1000 --gid 1000 --no-create-home --home-dir /builder-home builder && \
+    chown builder:builder /builder-home
+ENV HOME=/builder-home
+USER builder
+WORKDIR /work

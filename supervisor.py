@@ -312,10 +312,10 @@ def cleanup_session(session, runner, env, output, log, server_timeout=15):
                                              for pid in forced])
 
 
-def windows(log=None):
+def windows(log=None, environment=None):
     """Return (desktop exists, visible app, reliable observation)."""
     try:
-        env = dict(os.environ, LC_ALL='C')
+        env = dict(os.environ if environment is None else environment, LC_ALL='C')
         tree = subprocess.run(['xwininfo', '-root', '-tree'], capture_output=True,
                               text=True, errors='replace', env=env,
                               timeout=5, check=True).stdout
@@ -409,10 +409,7 @@ def main(*, base, diagnostics):
             log(f'Cannot start dedicated runtime: {error}', level='ERROR', exception=True)
             return 1
         env['QUANTOWER_X11_RUNTIME'] = x11_runtime
-        if x11_runtime == 'private':
-            env['LD_LIBRARY_PATH'] = str(base / 'runtime-components/x11')
-        else:
-            env.pop('LD_LIBRARY_PATH', None)
+        runtime_config.apply_wine_library_environment(base, env, x11_runtime)
         log('Selected X11 client runtime.', event='x11_runtime_selected', x11_runtime=x11_runtime,
             library_directory=env.get('LD_LIBRARY_PATH'),
             note='Manifest-pinned private Xlib selected.' if x11_runtime == 'private' else 'System Xlib selected.')
@@ -426,7 +423,7 @@ def main(*, base, diagnostics):
         # ownership is authoritative; host xwininfo cannot establish their state.
         desktop = False
         if mode == 'compatible':
-            desktop, visible, reliable = windows(log)
+            desktop, visible, reliable = windows(log, environment=env)
             if not reliable:
                 log('Cannot verify the compatible desktop state.', level='ERROR')
                 return 1

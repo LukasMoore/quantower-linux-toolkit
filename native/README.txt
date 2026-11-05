@@ -25,6 +25,16 @@ thread-owned implicit Uniscribe caches, and virtual-desktop taskbar fixes.
 Native Wayland is disabled; the integration uses Wine's X11 driver. This is a
 new upstream-based source build, excluding older local bitmap/profiling changes.
 It is not asserted to reproduce a prior runtime binary or its app behavior.
+The runtime build disables compilation of uninstalled upstream Wine test binaries;
+separate synthetic runtime probes and fresh-prefix integration tests are retained.
+The Debian 13 bundle configures GnuTLS, Fontconfig/FreeType, ALSA/PulseAudio,
+XInput2, OpenGL and Vulkan support. Its configure summary reports no OpenCL,
+smart-card, Unix VA/FFmpeg-library, OSSv4, ISDN or Samba NetAPI integration.
+UnixODBC was not found; its fallback libodbc.so SONAME is explicitly recorded
+as unavailable rather than treated as a collected library. Gettext tools
+are absent, so translations are not rebuilt. These optional omissions do not
+establish compatibility for workloads that require them; inspect the retained
+configure summary when building for a different application.
 
 The Xlib 1.8.14 correction moves sequence synchronization before final cached
 resource-ID replenishment. Existing assertions and lock/error paths remain.
@@ -45,8 +55,9 @@ libx11-dev, libxext-dev, libxrender-dev, libxrandr-dev, libxi-dev, libxcursor-de
 libxinerama-dev, libxxf86vm-dev, libvulkan-dev, libgl-dev, libgnutls28-dev,
 libasound2-dev, libpulse-dev, libdbus-1-dev, libudev-dev. Wine configure reports
 optional missing support; examine its summary instead of treating configure
-success as a guarantee of every feature. clang/lld and the MinGW headers are
-needed for Wine's PE modules. Both i686-w64-mingw32 and x86_64-w64-mingw32 C/C++
+success as a guarantee of every feature. A supported PE cross-toolchain and
+the MinGW headers are needed for Wine's PE modules. The Debian bundle uses
+GCC 14 MinGW cross-compilers. Both i686-w64-mingw32 and x86_64-w64-mingw32 C/C++
 cross-compilers are required; llvm-mingw target compilers are also accepted.
 Modern WoW64 does not require 32-bit Linux multilib development libraries.
 The tool does not install a Windows .NET runtime. Executable prerequisites and
@@ -76,6 +87,24 @@ memory. The destination must be a private current-user directory (mode 0700).
 The launcher enables it only when the installed runtime manifest pins its hash.
 It is not a full crash dump facility and does not capture all managed exceptions.
 tests/test_runtime_build.py exercises a synthetic child, never the live app.
+
+Synthetic Windows probes
+
+  python3 native/build-runtime-probes.py --output-dir ../runtime-probes
+
+This compiles original MIT probes for both Windows architectures and records
+source/binary hashes, compiler versions and audited DLL imports. The builder
+does not execute them. Run them only in your isolated test prefix using the
+runtime being evaluated. The default probe renders synthetic GDI+ text and
+runs four concurrent Arabic/Hebrew Uniscribe workers with cold per-run caches.
+It reports JSON booleans, counts, text metrics and a pixel checksum. Its expected
+result is passed=true, 2048 analysed strings, matched positive shaped/placed
+counts and zero unexpected errors. The checksum depends on the test fonts;
+it is not a platform-independent reference image or a performance benchmark.
+The optional --desktop AMP-Quantower --taskbar mode tests only its own fixture
+windows and their linked Wine shell button. The probe's compiled startup/runtime
+code requires the matching MinGW/GCC notices; integration PE files are not part
+of the source checkout or prebuilt runtime payload.
 
 Validation boundaries
 
