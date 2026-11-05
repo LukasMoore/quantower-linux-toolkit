@@ -1,0 +1,24 @@
+diff --git a/programs/explorer/systray.c b/programs/explorer/systray.c
+index 69d3ec6..a824c62 100644
+--- a/programs/explorer/systray.c
++++ b/programs/explorer/systray.c
+@@ -821,7 +821,9 @@ static void sync_taskbar_buttons(void)
+             continue;
+         }
+         win->active = (win->hwnd == foreground);
+-        win->visible = IsWindowVisible( win->hwnd ) && !GetWindow( win->hwnd, GW_OWNER );
++        win->visible = IsWindowVisible( win->hwnd ) &&
++                       (!GetWindow( win->hwnd, GW_OWNER ) ||
++                        (GetWindowLongPtrW( win->hwnd, GWL_EXSTYLE ) & WS_EX_APPWINDOW));
+         if (win->visible) count++;
+     }
+ 
+@@ -1252,7 +1254,7 @@ void initialize_systray( BOOL arg_using_root, BOOL arg_enable_shell, BOOL arg_sh
+         SetRect( &primary_rect, 0, 0, GetSystemMetrics( SM_CXSCREEN ), GetSystemMetrics( SM_CYSCREEN ) );
+         SubtractRect( &taskbar_rect, &primary_rect, &work_rect );
+ 
+-        tray_window = CreateWindowExW( WS_EX_NOACTIVATE, shell_traywnd_class.lpszClassName, NULL, WS_POPUP,
++        tray_window = CreateWindowExW( WS_EX_NOACTIVATE | WS_EX_TOPMOST, shell_traywnd_class.lpszClassName, NULL, WS_POPUP,
+                                        taskbar_rect.left, taskbar_rect.top, taskbar_rect.right - taskbar_rect.left,
+                                        taskbar_rect.bottom - taskbar_rect.top, 0, 0, 0, 0 );
+     }

@@ -1,0 +1,8 @@
+# Preserve checksum-pinned patch and upstream license bytes exactly.
+*.py text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.patch -text -whitespace
+third_party/** -text -whitespace

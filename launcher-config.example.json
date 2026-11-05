@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "desktop_width": 1920,
+  "desktop_height": 1080,
+  "output_width": null,
+  "output_height": null,
+  "refresh_hz": 60,
+  "idle_refresh_hz": 60,
+  "fullscreen": true,
+  "gpu_device_filter": null,
+  "wayland_display": null,
+  "host_runtime_dir": null,
+  "pulse_server": null,
+  "pipewire_runtime_dir": null
+}

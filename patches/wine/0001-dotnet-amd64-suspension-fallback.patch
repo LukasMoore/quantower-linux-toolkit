@@ -1,0 +1,24 @@
+diff --git a/dlls/kernel32/kernel32.spec b/dlls/kernel32/kernel32.spec
+index 5d6de13..986338e 100644
+--- a/dlls/kernel32/kernel32.spec
++++ b/dlls/kernel32/kernel32.spec
+@@ -133,7 +133,8 @@
+ 
+ # functions exported by name, ordinal doesn't matter
+ 
+-@ stdcall AcquireSRWLockExclusive(ptr) NTDLL.RtlAcquireSRWLockExclusive
++@ stdcall -arch=!x86_64 AcquireSRWLockExclusive(ptr) NTDLL.RtlAcquireSRWLockExclusive
++1 stdcall -arch=x86_64 AcquireSRWLockExclusive(ptr) NTDLL.RtlAcquireSRWLockExclusive
+ @ stdcall AcquireSRWLockShared(ptr) NTDLL.RtlAcquireSRWLockShared
+ @ stdcall -import ActivateActCtx(ptr ptr)
+ @ stdcall AddAtomA(str)
+@@ -1221,7 +1222,8 @@
+ @ stdcall -import QueryUnbiasedInterruptTime(ptr)
+ @ stub QueryWin31IniFilesMappedToRegistry
+ @ stdcall -import QueueUserAPC(ptr long long)
+-@ stdcall -import QueueUserAPC2(ptr long long long)
++@ stdcall -import -arch=!x86_64 QueueUserAPC2(ptr long long long)
++931 stdcall -noname -import -arch=x86_64 QueueUserAPC2(ptr long long long)
+ @ stdcall -import QueueUserWorkItem(ptr ptr long)
+ @ stdcall -import RaiseException(long long long ptr)
+ @ stdcall -import RaiseFailFastException(ptr ptr long)

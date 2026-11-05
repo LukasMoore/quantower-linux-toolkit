@@ -1,0 +1,36 @@
+From 175a67258952ae1c54a85183927b09328d20be2e Mon Sep 17 00:00:00 2001
+From: Vitali Vinahradski <vitali@vinahradski.de>
+Date: Tue, 29 Sep 2026 21:35:20 +0200
+Subject: [PATCH] WaylandBackend: do not track acquire/release for static black
+ buffer
+
+The 1x1 black backing framebuffer is immutable, backend-owned, and never needs client buffer locking. Tracking acquire and release on it causes spurious "Compositor released us but we were not acquired" error spam when buffer release events arrive asynchronously from previous frames.
+
+Fixes: https://github.com/ValveSoftware/gamescope/issues/1636
+---
+ src/Backends/WaylandBackend.cpp | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/Backends/WaylandBackend.cpp b/src/Backends/WaylandBackend.cpp
+index d53c2c46e..b3a12215e 100644
+--- a/src/Backends/WaylandBackend.cpp
++++ b/src/Backends/WaylandBackend.cpp
+@@ -980,6 +980,9 @@ namespace gamescope
+ 
+         xdg_log.debugf( "buffer_release: %p", pBuffer );
+ 
++        if ( this == m_pBackend->GetBlackFb() )
++            return;
++
+         OnCompositorRelease();
+     }
+ 
+@@ -1106,8 +1109,6 @@ namespace gamescope
+                 uint32_t uCurrentPlane = 0;
+                 if ( bNeedsBacking )
+                 {
+-                    m_pBackend->GetBlackFb()->OnCompositorAcquire();
+-
+                     CWaylandPlane *pPlane = &m_Planes[uCurrentPlane++];
+                     pPlane->Present(
+                         WaylandPlaneState

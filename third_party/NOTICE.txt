@@ -1,0 +1,27 @@
+Third-party source notices
+
+Wine 11.20, official source commit 7298a818b79446bae153b8d5aa27235ab3703bf9.
+The Wine patch contexts and modifications are LGPL-2.1-or-later. See wine/COPYING.LIB
+and original source-file copyright notices. The source archive retains the full
+upstream notices. Locally modified files and dates are identified by the patch
+series and runtime-lock.json. Do not present local patches as upstream releases.
+
+X.Org libX11 1.8.14. See xlib/COPYING for the complete set of historical copyright
+and permission notices. The locking patch retains those terms.
+
+Valve gamescope 3.16.25, source commit 17baf4abd1ab3353fb705e4d0d023f84e870f7e8.
+See gamescope/LICENSE: BSD-2-Clause core plus BSD-3-Clause notices for included
+OpenColorIO and ReShade portions. Preserve all applicable notices when distributing
+source or binaries. One patch is an official Valve commit; the Vulkan shutdown
+patch is a local modification.
+
+The source builder downloads pinned upstream gamescope subprojects for compilation
+(wlroots, libliftoff, vkroots, ReShade, SPIRV-Headers, GLM and stb). They are not
+vendored in this source package. Their original source/license notices remain in
+the extracted build trees; consult those licenses before redistributing binaries.
+Host build and runtime dependencies retain their individual licenses.
+
+The optional native assertion tracer, source builder and their regression tests
+are original project code under the root MIT license. Quantower and other vendor
+software/artwork are not included or licensed by this project. Users obtain the
+application separately from its publisher under the applicable terms.

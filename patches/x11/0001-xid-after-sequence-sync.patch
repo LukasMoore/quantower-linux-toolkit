@@ -1,0 +1,15 @@
+--- a/src/locking.c
++++ b/src/locking.c
+@@ -481,8 +481,11 @@
+ 	    if (ti->error_thread == xthread_self())
+ 		    return;
+ 
+-    _XIDHandler(dpy);
+     _XSeqSyncFunction(dpy);
++    /* Sequence synchronization can drop the display mutex while waiting for a
++     * reply. Another thread may consume the cached XID during that interval.
++     * Replenish the cache only after synchronization has finished. */
++    _XIDHandler(dpy);
+ }
+ 
+ /*

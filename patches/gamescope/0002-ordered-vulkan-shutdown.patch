@@ -1,0 +1,68 @@
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -1092,6 +1092,8 @@
+ 
+ 	gamescope::Process::KillAllChildren( getpid(), SIGTERM );
+ 	gamescope::Process::WaitForAllChildren();
++
++	vulkan_shutdown();
+ }
+ 
+ static void steamCompMgrThreadRun(int argc, char **argv)
+--- a/src/rendervulkan.cpp
++++ b/src/rendervulkan.cpp
+@@ -1516,6 +1516,20 @@
+ 	wait(m_submissionSeqNo, reset);
+ }
+ 
++void CVulkanDevice::shutdownCommandBuffers()
++{
++	// Complete compilation and GPU submissions while the driver is still alive.
++	// Global C++ destruction runs after driver exit handlers on some NVIDIA stacks.
++	m_pipelineThread.request_stop();
++	if (m_pipelineThread.joinable())
++		m_pipelineThread.join();
++	if (!m_device)
++		return;
++	waitIdle();
++	m_pendingCmdBufs.clear();
++	m_unusedCmdBufs.clear();
++}
++
+ void CVulkanDevice::resetCmdBuffers(uint64_t sequence)
+ {
+ 	auto last = m_pendingCmdBufs.find(sequence);
+@@ -1944,6 +1958,15 @@
+ }
+ 
+ CVulkanDevice g_device;
++
++void vulkan_shutdown()
++{
++	// Release owning globals before the driver's process-exit handlers run.
++	g_device.shutdownCommandBuffers();
++	g_output = VulkanOutput_t{};
++	for (auto &luts : g_ColorMgmtLuts)
++		luts.shutdown();
++}
+ 
+ static bool allDMABUFsEqual( wlr_dmabuf_attributes *pDMA )
+ {
+--- a/src/rendervulkan.hpp
++++ b/src/rendervulkan.hpp
+@@ -778,6 +778,7 @@
+ 	uint64_t submitInternal( CVulkanCmdBuffer* cmdBuf );
+ 	void wait(uint64_t sequence, bool reset = true);
+ 	void waitIdle(bool reset = true);
++	void shutdownCommandBuffers();
+ 	void garbageCollect();
+ 	inline VkDescriptorSet descriptorSet()
+ 	{
+@@ -1003,6 +1004,7 @@
+ bool vulkan_supports_hdr10();
+ 
+ void vulkan_wait_idle();
++void vulkan_shutdown();
+ 
+ // Whether the driver implements VK_EXT_physical_device_drm
+ bool vulkan_has_drm_props();

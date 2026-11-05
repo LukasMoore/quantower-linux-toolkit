@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "release_scope": "Experimental upstream source build. It excludes older app-specific bitmap/profiling changes and is not asserted to match any previous local runtime binary.",
+  "components": {
+    "wine": {
+      "version": "11.20",
+      "upstream_commit": "7298a818b79446bae153b8d5aa27235ab3703bf9",
+      "archive": {
+        "url": "https://dl.winehq.org/wine-builds/debian/pool/main/w/wine/wine_11.20~trixie.orig.tar.gz",
+        "filename": "wine_11.20~trixie.orig.tar.gz",
+        "root": "wine-11.20",
+        "sha256": "5ec21349f153cf43f2fe1476be2e29306f3cf0428770a1a4ca0c85ff239e0bdc"
+      },
+      "patches": [
+        {
+          "path": "patches/wine/0001-dotnet-amd64-suspension-fallback.patch",
+          "sha256": "cfa8f54df4d776818b73273d8b1581c58b4746e4a787bed1e79e81d92e74768c"
+        },
+        {
+          "path": "patches/wine/0002-xinput-button-mapping-recovery.patch",
+          "sha256": "d629c0cb15dafc65816d95cc9b47806165beaf9a0f2ab2b3715d7feab07fcba8"
+        },
+        {
+          "path": "patches/wine/0003-gdiplus-call-resources.patch",
+          "sha256": "2ec7a84998eabd2c3b4902691948373697ae6f52665ede1aaf46a84938f3cd66"
+        },
+        {
+          "path": "patches/wine/0004-uniscribe-thread-owned-cache.patch",
+          "sha256": "f6c8535e17986af28201424a43fffb59afa2e9de1a18840b0cdf9d6e308abd9c"
+        },
+        {
+          "path": "patches/wine/0005-explorer-appwindow-taskbar.patch",
+          "sha256": "7e0627a46b982a89955a4800738c853ffd3b2799334a537261c4754eb7459a37"
+        }
+      ],
+      "license": "LGPL-2.1-or-later",
+      "license_file": "third_party/wine/COPYING.LIB",
+      "pe_architectures": [
+        "i386",
+        "x86_64"
+      ],
+      "unix_host_architecture": "x86_64",
+      "build_mode": "modern-wow64"
+    },
+    "x11": {
+      "version": "1.8.14",
+      "archive": {
+        "url": "https://xorg.freedesktop.org/archive/individual/lib/libX11-1.8.14.tar.xz",
+        "filename": "libX11-1.8.14.tar.xz",
+        "root": "libX11-1.8.14",
+        "sha256": "bbc78c46217174655c2b32b138ad119f3ac15f50808b4d0b3a2677a4b1afc950"
+      },
+      "patches": [
+        {
+          "path": "patches/x11/0001-xid-after-sequence-sync.patch",
+          "sha256": "0ceeb81e44863689c6a1695e3e46d7b50ec8cc753dd25d4f17523d7ce0187936"
+        }
+      ],
+      "license": "MIT and historical notices; see COPYING",
+      "license_file": "third_party/xlib/COPYING"
+    },
+    "gamescope": {
+      "version": "3.16.25",
+      "upstream_commit": "17baf4abd1ab3353fb705e4d0d023f84e870f7e8",
+      "archive": {
+        "url": "https://codeload.github.com/ValveSoftware/gamescope/tar.gz/refs/tags/3.16.25",
+        "filename": "gamescope-3.16.25.tar.gz",
+        "root": "gamescope-3.16.25",
+        "sha256": "4ebb6df36b89c43892e9bebf24b983bc444e125a7e05cb0c9e0238d4bcc9ac85"
+      },
+      "extra_sources": [
+        {
+          "url": "https://gitlab.freedesktop.org/wlroots/wlroots/-/archive/88a869855742281c98c22cab9641b317b8d065ef/wlroots-88a869855742281c98c22cab9641b317b8d065ef.tar.gz",
+          "filename": "subprojects-wlroots.tar.gz",
+          "root": "wlroots-88a869855742281c98c22cab9641b317b8d065ef",
+          "sha256": "587256827f7e1bcbb7384d1c04c0e21682565169e7a906560f723820bcf78af2",
+          "destination": "subprojects/wlroots"
+        },
+        {
+          "url": "https://gitlab.freedesktop.org/emersion/libliftoff/-/archive/8b08dc1c14fd019cc90ddabe34ad16596b0691f4/libliftoff-8b08dc1c14fd019cc90ddabe34ad16596b0691f4.tar.gz",
+          "filename": "libliftoff.tar.gz",
+          "root": "libliftoff-8b08dc1c14fd019cc90ddabe34ad16596b0691f4",
+          "sha256": "8de28aee6f90f47b7fc7037dcd2360166197c0b5d2033f3afdbd34f2ea1bf216",
+          "destination": "subprojects/libliftoff"
+        },
+        {
+          "url": "https://codeload.github.com/Joshua-Ashton/vkroots/tar.gz/5106d8a0df95de66cc58dc1ea37e69c99afc9540",
+          "filename": "subprojects-vkroots.tar.gz",
+          "root": "vkroots-5106d8a0df95de66cc58dc1ea37e69c99afc9540",
+          "sha256": "37b77586e91f7ebee70380dcddd73bf01ae4acef1053e6be41d0485ede022422",
+          "destination": "subprojects/vkroots"
+        },
+        {
+          "url": "https://codeload.github.com/Joshua-Ashton/reshade/tar.gz/696b14cd6006ae9ca174e6164450619ace043283",
+          "filename": "src-reshade.tar.gz",
+          "root": "reshade-696b14cd6006ae9ca174e6164450619ace043283",
+          "sha256": "3aa6feda7773cc8ffa8fb012fe95e6207c776101e29198d0e0d34a0c5e339f6a",
+          "destination": "src/reshade"
+        },
+        {
+          "url": "https://codeload.github.com/KhronosGroup/SPIRV-Headers/tar.gz/d790ced752b5bfc06b6988baadef6eb2d16bdf96",
+          "filename": "thirdparty-SPIRV-Headers.tar.gz",
+          "root": "SPIRV-Headers-d790ced752b5bfc06b6988baadef6eb2d16bdf96",
+          "sha256": "90141b3f6261dba643fe546d56b4539e61fe40e307c5c3b9985ea9fa0622ac3f",
+          "destination": "thirdparty/SPIRV-Headers"
+        },
+        {
+          "url": "https://codeload.github.com/g-truc/glm/tar.gz/0af55ccecd98d4e5a8d1fad7de25ba429d60e863",
+          "filename": "subprojects-glm.tar.gz",
+          "root": "glm-0af55ccecd98d4e5a8d1fad7de25ba429d60e863",
+          "sha256": "e7f187d83523f505eb38dd25d297ea6c0d4ed856d733e808f18253f5a8fa88a0",
+          "destination": "subprojects/glm"
+        },
+        {
+          "url": "https://codeload.github.com/nothings/stb/tar.gz/5736b15f7ea0ffb08dd38af21067c314d6a3aae9",
+          "filename": "subprojects-stb.tar.gz",
+          "root": "stb-5736b15f7ea0ffb08dd38af21067c314d6a3aae9",
+          "sha256": "d00921d49b06af62aa6bfb97c1b136bec661dd11dd4eecbcb0da1f6da7cedb4c",
+          "destination": "subprojects/stb"
+        }
+      ],
+      "overlays": [
+        {
+          "from": "subprojects/packagefiles/glm/meson.build",
+          "to": "subprojects/glm/meson.build"
+        },
+        {
+          "from": "subprojects/packagefiles/stb/meson.build",
+          "to": "subprojects/stb/meson.build"
+        }
+      ],
+      "patches": [
+        {
+          "path": "patches/gamescope/0001-static-black-buffer.patch",
+          "sha256": "ed7379ae90c562f70bb99816b117ef19e791c02692b63526c370cd76f5025ede"
+        },
+        {
+          "path": "patches/gamescope/0002-ordered-vulkan-shutdown.patch",
+          "sha256": "b03b68bc924f7aa235f00a8ceabbdc8f81710a59091e3bd42499a269d0fba08e"
+        }
+      ],
+      "license": "BSD-2-Clause and BSD-3-Clause notices",
+      "license_file": "third_party/gamescope/LICENSE"
+    }
+  }
+}

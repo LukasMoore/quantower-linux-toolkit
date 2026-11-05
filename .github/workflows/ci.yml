@@ -1,0 +1,49 @@
+name: Source checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.12', '3.13']
+    steps:
+      - name: Check out source
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Audit the published source inventory
+        run: python tools/check-public-release.py
+      - name: Check Python and shell syntax
+        run: |
+          python -m compileall -q -x '(^|/)(\.git|build|dist)/' .
+          bash -n launch.sh render-launch.sh tests/native/build-xid-stress.sh
+      - name: Run isolated tests
+        run: python -m unittest discover -s tests -v
+      - name: Exercise source archive
+        shell: bash
+        run: |
+          export_dir="$(mktemp -d)"
+          git archive HEAD | tar -x -C "$export_dir"
+          cd "$export_dir"
+          python tools/check-public-release.py --source-tree
+          python -m unittest discover -s tests -v
+          python tools/install.py --help
+          python tools/fetch-installers.py --help
+          python tools/isolate-icon-fonts.py --help
+          python tools/build-runtime.py --help
+          python doctor.py --help
+          python doctor.py --source-only

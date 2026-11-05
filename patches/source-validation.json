@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "scope": "Open-source source integrity and exact patch application only; no application benchmark or runtime integration claim.",
+  "sources": [
+    {
+      "component": "wine",
+      "version": "11.20",
+      "archive_sha256": "5ec21349f153cf43f2fe1476be2e29306f3cf0428770a1a4ca0c85ff239e0bdc",
+      "patches": [
+        {
+          "path": "patches/wine/0001-dotnet-amd64-suspension-fallback.patch",
+          "sha256": "cfa8f54df4d776818b73273d8b1581c58b4746e4a787bed1e79e81d92e74768c"
+        },
+        {
+          "path": "patches/wine/0002-xinput-button-mapping-recovery.patch",
+          "sha256": "d629c0cb15dafc65816d95cc9b47806165beaf9a0f2ab2b3715d7feab07fcba8"
+        },
+        {
+          "path": "patches/wine/0003-gdiplus-call-resources.patch",
+          "sha256": "2ec7a84998eabd2c3b4902691948373697ae6f52665ede1aaf46a84938f3cd66"
+        },
+        {
+          "path": "patches/wine/0004-uniscribe-thread-owned-cache.patch",
+          "sha256": "f6c8535e17986af28201424a43fffb59afa2e9de1a18840b0cdf9d6e308abd9c"
+        },
+        {
+          "path": "patches/wine/0005-explorer-appwindow-taskbar.patch",
+          "sha256": "7e0627a46b982a89955a4800738c853ffd3b2799334a537261c4754eb7459a37"
+        }
+      ],
+      "zero_fuzz_patch_application": "PASS"
+    },
+    {
+      "component": "x11",
+      "version": "1.8.14",
+      "archive_sha256": "bbc78c46217174655c2b32b138ad119f3ac15f50808b4d0b3a2677a4b1afc950",
+      "patches": [
+        {
+          "path": "patches/x11/0001-xid-after-sequence-sync.patch",
+          "sha256": "0ceeb81e44863689c6a1695e3e46d7b50ec8cc753dd25d4f17523d7ce0187936"
+        }
+      ],
+      "zero_fuzz_patch_application": "PASS"
+    },
+    {
+      "component": "gamescope",
+      "version": "3.16.25",
+      "archive_sha256": "4ebb6df36b89c43892e9bebf24b983bc444e125a7e05cb0c9e0238d4bcc9ac85",
+      "patches": [
+        {
+          "path": "patches/gamescope/0001-static-black-buffer.patch",
+          "sha256": "ed7379ae90c562f70bb99816b117ef19e791c02692b63526c370cd76f5025ede"
+        },
+        {
+          "path": "patches/gamescope/0002-ordered-vulkan-shutdown.patch",
+          "sha256": "b03b68bc924f7aa235f00a8ceabbdc8f81710a59091e3bd42499a269d0fba08e"
+        }
+      ],
+      "zero_fuzz_patch_application": "PASS"
+    }
+  ],
+  "optional_assertion_probe": {
+    "result": "PASS",
+    "original_assertion_fatal": true,
+    "trace_is_bounded": true,
+    "assertion_arguments_excluded": true
+  },
+  "offline_tests": {
+    "count": 16,
+    "result": "PASS"
+  },
+  "limitations": [
+    "Full native component compilation and app integration are separate from source preparation.",
+    "Host compiler and development package ABIs affect generated binaries.",
+    "Patches are local unless explicitly labeled as upstream commits."
+  ],
+  "download_verification": [
+    {
+      "file": "wine_11.20~trixie.orig.tar.gz",
+      "bytes": 75680832,
+      "sha256": "5ec21349f153cf43f2fe1476be2e29306f3cf0428770a1a4ca0c85ff239e0bdc",
+      "passed": true
+    },
+    {
+      "file": "libX11-1.8.14.tar.xz",
+      "bytes": 1897544,
+      "sha256": "bbc78c46217174655c2b32b138ad119f3ac15f50808b4d0b3a2677a4b1afc950",
+      "passed": true
+    },
+    {
+      "file": "gamescope-3.16.25.tar.gz",
+      "bytes": 918395,
+      "sha256": "4ebb6df36b89c43892e9bebf24b983bc444e125a7e05cb0c9e0238d4bcc9ac85",
+      "passed": true
+    },
+    {
+      "file": "subprojects-wlroots.tar.gz",
+      "bytes": 671664,
+      "sha256": "587256827f7e1bcbb7384d1c04c0e21682565169e7a906560f723820bcf78af2",
+      "passed": true
+    },
+    {
+      "file": "libliftoff.tar.gz",
+      "bytes": 38930,
+      "sha256": "8de28aee6f90f47b7fc7037dcd2360166197c0b5d2033f3afdbd34f2ea1bf216",
+      "passed": true
+    },
+    {
+      "file": "subprojects-vkroots.tar.gz",
+      "bytes": 352651,
+      "sha256": "37b77586e91f7ebee70380dcddd73bf01ae4acef1053e6be41d0485ede022422",
+      "passed": true
+    },
+    {
+      "file": "src-reshade.tar.gz",
+      "bytes": 1684777,
+      "sha256": "3aa6feda7773cc8ffa8fb012fe95e6207c776101e29198d0e0d34a0c5e339f6a",
+      "passed": true
+    },
+    {
+      "file": "thirdparty-SPIRV-Headers.tar.gz",
+      "bytes": 463804,
+      "sha256": "90141b3f6261dba643fe546d56b4539e61fe40e307c5c3b9985ea9fa0622ac3f",
+      "passed": true
+    },
+    {
+      "file": "subprojects-glm.tar.gz",
+      "bytes": 4569211,
+      "sha256": "e7f187d83523f505eb38dd25d297ea6c0d4ed856d733e808f18253f5a8fa88a0",
+      "passed": true
+    },
+    {
+      "file": "subprojects-stb.tar.gz",
+      "bytes": 1393071,
+      "sha256": "d00921d49b06af62aa6bfb97c1b136bec661dd11dd4eecbcb0da1f6da7cedb4c",
+      "passed": true
+    }
+  ],
+  "fresh_network_path": {
+    "component": "x11",
+    "download_sha256": "bbc78c46217174655c2b32b138ad119f3ac15f50808b4d0b3a2677a4b1afc950",
+    "safe_extract_and_patch": "PASS"
+  }
+}

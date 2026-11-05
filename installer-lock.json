@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "artifacts": {
+    "amp": {
+      "filename": "AMP_Quantower-1.147.5.exe",
+      "url": "https://updates.quantower.com/AMP_Quantower/x64/versions/v1.147.5/AMP_Quantower.exe",
+      "algorithm": "sha256",
+      "digest": "5059b67abcb3dfa48dd0865ce3464407a26860fbec8b2ab833e3003071823ba2",
+      "source": "https://updates.quantower.com/AMP_Quantower/x64/AppVersions.xml",
+      "license": "Vendor software, downloaded by the user; never included in source releases."
+    },
+    "desktop": {
+      "filename": "windowsdesktop-runtime-10.0.14-win-x64.exe",
+      "url": "https://builds.dotnet.microsoft.com/dotnet/WindowsDesktop/10.0.14/windowsdesktop-runtime-10.0.14-win-x64.exe",
+      "algorithm": "sha512",
+      "digest": "337dacab1636219147b3fe75e451bf5b1c17bca2c86328266d40c4ad1ff0a1e8391c4746ca7a5b702b65b61e8bfe834566cfc1b548cc10aef90b441357b10b69",
+      "source": "https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json",
+      "license": "Microsoft runtime installer; downloaded locally, not redistributed by this repository."
+    }
+  }
+}

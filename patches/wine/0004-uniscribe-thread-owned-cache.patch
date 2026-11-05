@@ -1,0 +1,57 @@
+diff --git a/dlls/gdi32/uniscribe/usp10.c b/dlls/gdi32/uniscribe/usp10.c
+index 2880a5f..9b86537 100644
+--- a/dlls/gdi32/uniscribe/usp10.c
++++ b/dlls/gdi32/uniscribe/usp10.c
+@@ -780,6 +780,7 @@ static inline BOOL set_cache_glyph_widths(SCRIPT_CACHE *psc, WORD glyph, ABC *ab
+ static HRESULT init_script_cache(const HDC hdc, SCRIPT_CACHE *psc)
+ {
+     ScriptCache *sc;
++    DWORD owner_thread = GetCurrentThreadId();
+     unsigned size;
+     LOGFONTW lf;
+ 
+@@ -798,7 +799,7 @@ static HRESULT init_script_cache(const HDC hdc, SCRIPT_CACHE *psc)
+     EnterCriticalSection(&cs_script_cache);
+     LIST_FOR_EACH_ENTRY(sc, &script_cache_list, ScriptCache, entry)
+     {
+-        if (!memcmp(&sc->lf, &lf, sizeof(lf)))
++        if (sc->owner_thread == owner_thread && !memcmp(&sc->lf, &lf, sizeof(lf)))
+         {
+             sc->refcount++;
+             LeaveCriticalSection(&cs_script_cache);
+@@ -829,18 +830,20 @@ static HRESULT init_script_cache(const HDC hdc, SCRIPT_CACHE *psc)
+     }
+     sc->lf = lf;
+     sc->refcount = 1;
++    sc->owner_thread = owner_thread;
+     *psc = sc;
+ 
+     EnterCriticalSection(&cs_script_cache);
+     list_add_head(&script_cache_list, &sc->entry);
+     LIST_FOR_EACH_ENTRY(sc, &script_cache_list, ScriptCache, entry)
+     {
+-        if (sc != *psc && !memcmp(&sc->lf, &lf, sizeof(lf)))
++        if (sc != *psc && sc->owner_thread == owner_thread && !memcmp(&sc->lf, &lf, sizeof(lf)))
+         {
+-            /* Another thread won the race. Use their cache instead of ours */
+-            list_remove(&sc->entry);
++            /* An entry appeared during construction. Unlink and free only ours. */
++            list_remove(&((ScriptCache *)*psc)->entry);
+             sc->refcount++;
+             LeaveCriticalSection(&cs_script_cache);
++            free(((ScriptCache *)*psc)->otm);
+             free(*psc);
+             *psc = sc;
+             return S_OK;
+diff --git a/dlls/gdi32/uniscribe/usp10_internal.h b/dlls/gdi32/uniscribe/usp10_internal.h
+index d144647..41f4756 100644
+--- a/dlls/gdi32/uniscribe/usp10_internal.h
++++ b/dlls/gdi32/uniscribe/usp10_internal.h
+@@ -188,6 +188,7 @@ typedef struct {
+ typedef struct {
+     struct list entry;
+     DWORD refcount;
++    DWORD owner_thread; /* Mutable shaping data must not alias independent threads. */
+     LOGFONTW lf;
+     TEXTMETRICW tm;
+     OUTLINETEXTMETRICW *otm;

@@ -1,0 +1,161 @@
+diff --git a/dlls/winex11.drv/mouse.c b/dlls/winex11.drv/mouse.c
+index cb79ed5..5a28d44 100644
+--- a/dlls/winex11.drv/mouse.c
++++ b/dlls/winex11.drv/mouse.c
+@@ -35,6 +35,19 @@
+ #if defined(HAVE_X11_EXTENSIONS_XINPUT2_H) && defined(HAVE_X11_EXTENSIONS_XINPUT_H)
+ #include <X11/extensions/XInput.h>
+ #include <X11/extensions/XInput2.h>
++#define BOOL X_BOOL
++#define BYTE X_BYTE
++#define INT8 X_INT8
++#define INT16 X_INT16
++#define INT32 X_INT32
++#define INT64 X_INT64
++#include <X11/extensions/XIproto.h>
++#undef BOOL
++#undef BYTE
++#undef INT8
++#undef INT16
++#undef INT32
++#undef INT64
+ #else
+ #ifdef HAVE_X11_EXTENSIONS_XINPUT_H
+ #undef HAVE_X11_EXTENSIONS_XINPUT_H
+@@ -137,6 +150,7 @@ static Cursor create_cursor( HANDLE handle );
+ #ifdef HAVE_X11_EXTENSIONS_XINPUT2_H
+ static BOOL xinput2_available;
+ static BOOL broken_rawevents;
++static int xinput_error_base;
+ #define MAKE_FUNCPTR(f) static typeof(f) * p##f
+ MAKE_FUNCPTR(XIGetClientPointer);
+ MAKE_FUNCPTR(XIFreeDeviceInfo);
+@@ -263,31 +277,71 @@ void x11drv_init_mouse( Display *display )
+     free( InterlockedExchangePointer( (void**)&pointer_mapping, tmp ) );
+ }
+ 
++static int device_mapping_error_handler( Display *display, XErrorEvent *event, void *arg )
++{
++    unsigned int request = (UINT_PTR)arg;
++
++    return event->request_code == xinput2_opcode && event->minor_code == request &&
++           (event->error_code == xinput_error_base + XI_BadDevice ||
++            (request == X_GetDeviceButtonMapping && event->error_code == BadMatch));
++}
++
++static void close_mapping_device( Display *display, XDevice *device )
++{
++    X11DRV_expect_error( display, device_mapping_error_handler, (void *)(UINT_PTR)X_CloseDevice );
++    pXCloseDevice( display, device );
++    XSync( display, False );
++    if (X11DRV_check_error()) WARN( "Cursor device disappeared while closing.\n" );
++}
++
++static void init_device_mapping( struct mouse_button_mapping *mapping, int deviceid )
++{
++    unsigned int i;
++
++    mapping->deviceid = deviceid;
++    mapping->button_count = ARRAY_SIZE( mapping->buttons );
++    for (i = 0; i < mapping->button_count; i++) mapping->buttons[i] = i + 1;
++}
++
+ static void update_device_mapping( Display *display, int deviceid )
+ {
+     struct mouse_button_mapping *tmp;
+     XDevice *device;
++    int count, error;
+ 
+-    if (!deviceid || !(device = pXOpenDevice( display, deviceid )))
+-    {
+-        WARN( "Unable to open cursor device %d\n", deviceid );
+-        return;
+-    }
+-
++    if (!deviceid) return;
+     if (!(tmp = malloc( sizeof(*tmp) )))
+     {
+         WARN( "Unable to allocate device mapping.\n" );
+-        pXCloseDevice( display, device );
+         return;
+     }
++    /* A device may disappear between the event, open, and mapping requests.
++     * Cache an identity fallback for this source instead of another source's map. */
++    init_device_mapping( tmp, deviceid );
++
++    X11DRV_expect_error( display, device_mapping_error_handler, (void *)(UINT_PTR)X_OpenDevice );
++    device = pXOpenDevice( display, deviceid );
++    error = X11DRV_check_error();
++    if (error || !device)
++    {
++        WARN( "Unable to open cursor device %d, using identity mapping.\n", deviceid );
++        if (device) close_mapping_device( display, device );
++    }
++    else
++    {
++        X11DRV_expect_error( display, device_mapping_error_handler, (void *)(UINT_PTR)X_GetDeviceButtonMapping );
++        count = pXGetDeviceButtonMapping( display, device, tmp->buttons, ARRAY_SIZE( tmp->buttons ) );
++        error = X11DRV_check_error();
++        if (error || count <= 0 || (unsigned int)count > ARRAY_SIZE( tmp->buttons ))
++        {
++            WARN( "Unable to map cursor device %d, using identity mapping.\n", deviceid );
++            init_device_mapping( tmp, deviceid );
++        }
++        else tmp->button_count = count;
++        close_mapping_device( display, device );
++    }
+ 
+-    tmp->deviceid = deviceid;
+-    tmp->button_count = ARRAY_SIZE( tmp->buttons );
+-    tmp->button_count = pXGetDeviceButtonMapping( display, device, tmp->buttons, tmp->button_count );
+-
+-    free( InterlockedExchangePointer( (void**)&device_mapping, tmp ) );
+-
+-    pXCloseDevice( display, device );
++    free( InterlockedExchangePointer( (void **)&device_mapping, tmp ) );
+ }
+ 
+ /***********************************************************************
+@@ -1778,12 +1832,21 @@ static BOOL X11DRV_RawButtonEvent( XGenericEventCookie *cookie )
+     int button = event->detail - 1;
+     POINT pt;
+ 
++    if (event->deviceid != thread_data->xinput2_pointer) return FALSE;
++    if (button < 0 || (unsigned int)button >= ARRAY_SIZE( device_mapping->buttons )) return FALSE;
+     if (!device_mapping || device_mapping->deviceid != event->sourceid)
+         update_device_mapping( event->display, event->sourceid );
+-    if (event->deviceid != thread_data->xinput2_pointer) return FALSE;
+ 
+-    if (button >= 0 && device_mapping)  button = device_mapping->buttons[button] - 1;
+-    if (button >= 0 && pointer_mapping) button = pointer_mapping->buttons[button] - 1;
++    if (device_mapping)
++    {
++        if (device_mapping->deviceid != event->sourceid || (unsigned int)button >= device_mapping->button_count) return FALSE;
++        button = device_mapping->buttons[button] - 1;
++    }
++    if (pointer_mapping)
++    {
++        if (button < 0 || (unsigned int)button >= pointer_mapping->button_count) return FALSE;
++        button = pointer_mapping->buttons[button] - 1;
++    }
+     if (button < 0 || button >= NB_BUTTONS) return FALSE;
+ 
+     if (event->evtype == XI_RawButtonRelease)
+@@ -1850,7 +1913,7 @@ static BOOL X11DRV_TouchEvent( HWND hwnd, XGenericEventCookie *xev )
+ void x11drv_xinput2_load(void)
+ {
+ #if defined(SONAME_LIBXI) && defined(HAVE_X11_EXTENSIONS_XINPUT2_H)
+-    int event, error;
++    int event;
+     void *libxi_handle = dlopen( SONAME_LIBXI, RTLD_NOW );
+ 
+     if (!libxi_handle)
+@@ -1875,7 +1938,7 @@ void x11drv_xinput2_load(void)
+     LOAD_FUNCPTR(XGetDeviceButtonMapping);
+ #undef LOAD_FUNCPTR
+ 
+-    xinput2_available = XQueryExtension( gdi_display, "XInputExtension", &xinput2_opcode, &event, &error );
++    xinput2_available = XQueryExtension( gdi_display, "XInputExtension", &xinput2_opcode, &event, &xinput_error_base );
+ 
+     /* Until version 1.10.4 rawinput was broken in XOrg, see
+      * https://bugs.freedesktop.org/show_bug.cgi?id=30068 */

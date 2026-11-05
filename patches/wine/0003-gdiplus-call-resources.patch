@@ -1,0 +1,203 @@
+diff --git a/dlls/gdiplus/gdiplus_private.h b/dlls/gdiplus/gdiplus_private.h
+index c0b3346..993ffb0 100644
+--- a/dlls/gdiplus/gdiplus_private.h
++++ b/dlls/gdiplus/gdiplus_private.h
+@@ -678,11 +678,13 @@ struct gdip_font_link_section {
+     DWORD start; /* The starting index of the string where the font applies. */
+     DWORD end; /* The end index of the string. */
+     GpFont *font;
++    HFONT hfont[2]; /* Local to one layout call, always deselected between queries. */
+ };
+ 
+ struct gdip_font_link_info {
+     GDIPCONST GpFont *base_font;
+     struct list sections;
++    unsigned int hfont_count;
+ };
+ 
+ struct gdip_format_string_info {
+diff --git a/dlls/gdiplus/graphics.c b/dlls/gdiplus/graphics.c
+index 22551e9..7eb76ff 100644
+--- a/dlls/gdiplus/graphics.c
++++ b/dlls/gdiplus/graphics.c
+@@ -2438,18 +2438,20 @@ void get_log_fontW(const GpFont *font, BOOL vertical, GpGraphics *graphics, LOGF
+         lstrcpyW(lf->lfFaceName, font->family->FamilyName);
+ }
+ 
+-void get_font_hfont(GpGraphics *graphics, GDIPCONST GpFont *font, BOOL vertical,
+-                           GDIPCONST GpStringFormat *format, HFONT *hfont,
+-                           LOGFONTW *lfw_return, GDIPCONST GpMatrix *matrix)
++static void get_font_hfont_with_hdc(GpGraphics *graphics, GDIPCONST GpFont *font, BOOL vertical,
++                                  GDIPCONST GpStringFormat *format, HFONT *hfont,
++                                  LOGFONTW *lfw_return, GDIPCONST GpMatrix *matrix, HDC hdc)
+ {
+-    HDC hdc = CreateCompatibleDC(0);
++    BOOL own_hdc = !hdc;
+     REAL angle, rel_width, rel_height, font_height;
+     LOGFONTW lfw;
+-    HFONT unscaled_font;
++    HFONT unscaled_font, old_font;
+     TEXTMETRICW textmet;
+     GDIPCONST GpMatrix vert_matrix = {{0,1,-1,0,0,0}}, identity = {{1,0,0,1,0,0}};
+     GpMatrix text_matrix;
+ 
++    if (own_hdc) hdc = CreateCompatibleDC(0);
++
+     if (font->unit == UnitPixel || font->unit == UnitWorld)
+         font_height = font->emSize;
+     else
+@@ -2485,7 +2487,7 @@ void get_font_hfont(GpGraphics *graphics, GDIPCONST GpFont *font, BOOL vertical,
+     lfw.lfHeight = -gdip_round(font_height * rel_height);
+     unscaled_font = CreateFontIndirectW(&lfw);
+ 
+-    SelectObject(hdc, unscaled_font);
++    old_font = SelectObject(hdc, unscaled_font);
+     GetTextMetricsW(hdc, &textmet);
+ 
+     lfw.lfWidth = gdip_round(textmet.tmAveCharWidth * rel_width / rel_height);
+@@ -2496,10 +2498,20 @@ void get_font_hfont(GpGraphics *graphics, GDIPCONST GpFont *font, BOOL vertical,
+     if (lfw_return)
+         *lfw_return = lfw;
+ 
+-    DeleteDC(hdc);
++    if (own_hdc)
++        DeleteDC(hdc);
++    else
++        SelectObject(hdc, old_font);
+     DeleteObject(unscaled_font);
+ }
+ 
++void get_font_hfont(GpGraphics *graphics, GDIPCONST GpFont *font, BOOL vertical,
++                   GDIPCONST GpStringFormat *format, HFONT *hfont,
++                   LOGFONTW *lfw_return, GDIPCONST GpMatrix *matrix)
++{
++    get_font_hfont_with_hdc(graphics, font, vertical, format, hfont, lfw_return, matrix, NULL);
++}
++
+ GpStatus WINGDIPAPI GdipCreateFromHDC(HDC hdc, GpGraphics **graphics)
+ {
+     TRACE("(%p, %p)\n", hdc, graphics);
+@@ -6371,9 +6383,9 @@ GpStatus WINGDIPAPI GdipIsVisibleRectI(GpGraphics *graphics, INT x, INT y, INT w
+ /* Populates gdip_font_link_info struct based on the base_font and input string */
+ static void generate_font_link_info(struct gdip_format_string_info *info, DWORD length, GDIPCONST GpFont *base_font)
+ {
+-    IMLangFontLink *iMLFL;
++    IMLangFontLink *iMLFL = NULL;
+     GpFont *gpfont;
+-    HFONT map_hfont, hfont, old_font;
++    HFONT map_hfont, hfont = NULL, old_font;
+     LONG processed, progress = 0;
+     struct gdip_font_link_section *section;
+     DWORD string_codepages;
+@@ -6383,6 +6395,7 @@ static void generate_font_link_info(struct gdip_format_string_info *info, DWORD
+ 
+     list_init(&info->font_link_info.sections);
+     info->font_link_info.base_font = base_font;
++    info->font_link_info.hfont_count = 0;
+ 
+     glyph_indices = calloc(length, sizeof(*glyph_indices));
+     GetGlyphIndicesW(info->hdc, info->string, length, glyph_indices, GGI_MARK_NONEXISTING_GLYPHS);
+@@ -6392,10 +6405,6 @@ static void generate_font_link_info(struct gdip_format_string_info *info, DWORD
+         if (info->string[progress] == '\r' || info->string[progress] == '\n')
+             glyph_indices[progress] = 0;
+ 
+-    GetGlobalFontLinkObject(&iMLFL);
+-
+-    get_font_hfont(info->graphics, base_font, FALSE, NULL, &hfont, NULL, NULL);
+-
+     progress = 0;
+     while (progress < length)
+     {
+@@ -6412,6 +6421,14 @@ static void generate_font_link_info(struct gdip_format_string_info *info, DWORD
+         }
+         else
+         {
++            /* Font mapping is only needed when the selected base font lacks a
++             * glyph. Keep the same fallback path without realizing its resources
++             * for the common all-present string. */
++            if (!iMLFL)
++            {
++                GetGlobalFontLinkObject(&iMLFL);
++                get_font_hfont(info->graphics, base_font, FALSE, NULL, &hfont, NULL, NULL);
++            }
+             IMLangFontLink_GetStrCodePages(iMLFL, &info->string[progress], length - progress,
+                                             0, &string_codepages, &processed);
+             hr = IMLangFontLink_MapFont(iMLFL, info->hdc, string_codepages, hfont, &map_hfont);
+@@ -6435,8 +6452,8 @@ static void generate_font_link_info(struct gdip_format_string_info *info, DWORD
+         progress += processed;
+     }
+ 
+-    DeleteObject(hfont);
+-    IMLangFontLink_Release(iMLFL);
++    if (hfont) DeleteObject(hfont);
++    if (iMLFL) IMLangFontLink_Release(iMLFL);
+     free(glyph_indices);
+ }
+ 
+@@ -6445,6 +6462,7 @@ static void font_link_get_text_extent_point(struct gdip_format_string_info *info
+ {
+     DWORD to_measure_length;
+     HFONT hfont, oldhfont;
++    BOOL temporary_hfont;
+     SIZE sizeaux = { 0 };
+     int i = index, fitaux = 0;
+     struct gdip_font_link_section *section;
+@@ -6461,11 +6479,25 @@ static void font_link_get_text_extent_point(struct gdip_format_string_info *info
+ 
+         to_measure_length = min(length - (i - index), section->end - i);
+ 
+-        get_font_hfont(info->graphics, section->font, vertical, NULL, &hfont, NULL, NULL);
++        hfont = section->hfont[!!vertical];
++        temporary_hfont = FALSE;
++        if (!hfont)
++        {
++            get_font_hfont(info->graphics, section->font, vertical, NULL, &hfont, NULL, NULL);
++            /* The font, graphics transform and orientation stay fixed during one
++             * layout call. Reuse its realized font across fit/line-width queries.
++             * Bound retained handles for long strings with many fallback runs. */
++            if (hfont && info->font_link_info.hfont_count < 16)
++            {
++                section->hfont[!!vertical] = hfont;
++                info->font_link_info.hfont_count++;
++            }
++            else temporary_hfont = TRUE;
++        }
+         oldhfont = SelectObject(info->hdc, hfont);
+         GetTextExtentExPointW(info->hdc, &info->string[i], to_measure_length, max_ext, &fitaux, NULL, &sizeaux);
+         SelectObject(info->hdc, oldhfont);
+-        DeleteObject(hfont);
++        if (temporary_hfont) DeleteObject(hfont);
+ 
+         max_ext -= sizeaux.cx;
+         if (fit)
+@@ -6486,6 +6518,8 @@ static void release_font_link_info(struct gdip_font_link_info *font_link_info)
+     {
+         struct gdip_font_link_section *section = LIST_ENTRY(entry, struct gdip_font_link_section, entry);
+         list_remove(entry);
++        DeleteObject(section->hfont[0]);
++        DeleteObject(section->hfont[1]);
+         if (section->font != font_link_info->base_font)
+             GdipDeleteFont(section->font);
+         free(section);
+@@ -7102,7 +7136,9 @@ GpStatus WINGDIPAPI GdipMeasureString(GpGraphics *graphics,
+     if (scaled_rect.Width >= 1 << 23) scaled_rect.Width = 1 << 23;
+     if (scaled_rect.Height >= 1 << 23) scaled_rect.Height = 1 << 23;
+ 
+-    get_font_hfont(graphics, font, vertical, format, &gdifont, NULL, NULL);
++    /* The temporary bitmap text DC still has the metrics state of a fresh DC. */
++    get_font_hfont_with_hdc(graphics, font, vertical, format, &gdifont, NULL, NULL,
++                          graphics->image_type == ImageTypeBitmap ? temp_hdc : NULL);
+     oldfont = SelectObject(hdc, gdifont);
+ 
+     set_rect(bounds, rect->X, rect->Y, 0.0f, 0.0f);
+@@ -7415,7 +7451,9 @@ GpStatus WINGDIPAPI GdipDrawString(GpGraphics *graphics, GDIPCONST WCHAR *string
+         SelectClipRgn(hdc, rgn);
+     }
+ 
+-    get_font_hfont(graphics, font, vertical, format, &gdifont, NULL, NULL);
++    /* Only the clip region has changed on the temporary bitmap text DC. */
++    get_font_hfont_with_hdc(graphics, font, vertical, format, &gdifont, NULL, NULL,
++                          graphics->image_type == ImageTypeBitmap ? temp_hdc : NULL);
+     SelectObject(hdc, gdifont);
+ 
+     args.brush = brush;

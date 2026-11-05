@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "source_lock_sha256": "87b9524e007d0bba55ff5b38c6a801bbba9194e8c1ce49df436b3e119d3b0828",
+  "source_preparation": {
+    "all_archives_verified": 10,
+    "exact_patches_applied": 8,
+    "context_fuzz": 0,
+    "patches": {
+      "wine": [
+        "cfa8f54df4d776818b73273d8b1581c58b4746e4a787bed1e79e81d92e74768c",
+        "d629c0cb15dafc65816d95cc9b47806165beaf9a0f2ab2b3715d7feab07fcba8",
+        "2ec7a84998eabd2c3b4902691948373697ae6f52665ede1aaf46a84938f3cd66",
+        "f6c8535e17986af28201424a43fffb59afa2e9de1a18840b0cdf9d6e308abd9c",
+        "7e0627a46b982a89955a4800738c853ffd3b2799334a537261c4754eb7459a37"
+      ],
+      "x11": [
+        "0ceeb81e44863689c6a1695e3e46d7b50ec8cc753dd25d4f17523d7ce0187936"
+      ],
+      "gamescope": [
+        "ed7379ae90c562f70bb99816b117ef19e791c02692b63526c370cd76f5025ede",
+        "b03b68bc924f7aa235f00a8ceabbdc8f81710a59091e3bd42499a269d0fba08e"
+      ]
+    }
+  },
+  "compile_validation": {
+    "source": "Pinned upstream Wine 11.20 plus this patch series",
+    "architecture": "x86_64",
+    "modules_linked": [
+      "kernel32.dll",
+      "gdiplus.dll",
+      "gdi32.dll",
+      "explorer.exe",
+      "winex11.so"
+    ],
+    "xinput_enabled": true,
+    "result": "PASS",
+    "configuration": "Isolated module build using an available compiler and extracted development headers; optional unrelated Wine features were omitted."
+  },
+  "limits": [
+    "This is not a complete modern WoW64/i386 build.",
+    "A complete Wine/gamescope runtime and application integration from the public recipe have not been validated.",
+    "No application benchmark or production suitability claim is made."
+  ]
+}

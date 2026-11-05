@@ -1,0 +1,12 @@
+{
+  "policy": "Primary project and publisher documentation only. Local implementation and test claims are separate from upstream documentation.",
+  "sources": [
+    {"purpose": "Python CI matrix", "url": "https://docs.github.com/en/actions/tutorials/build-and-test-code/python"},
+    {"purpose": "Least-privilege workflow and immutable action references", "url": "https://docs.github.com/en/actions/reference/security/secure-use"},
+    {"purpose": "Pinned checkout action", "url": "https://github.com/actions/checkout/commit/1af3b93b6815bc44a9784bd300feb67ff0d1eeb3"},
+    {"purpose": "Pinned setup-python action", "url": "https://github.com/actions/setup-python/commit/e797f83bcb11b83ae66e0230d6156d7c80228e7c"},
+    {"purpose": "Official Quantower AMP channel", "url": "https://updates.quantower.com/AMP_Quantower/x64/AppVersions.xml"},
+    {"purpose": "Quantower use and publication terms", "url": "https://www.quantower.com/terms-of-use"},
+    {"purpose": "Microsoft .NET downloads", "url": "https://dotnet.microsoft.com/en-us/download/dotnet"}
+  ]
+}
