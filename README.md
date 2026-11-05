@@ -1,5 +1,13 @@
 # Quantower Linux Toolkit
 
+**AI-generated software — individual testing required.** The toolkit's original
+launcher code, tools, local patches and tests were largely generated or modified
+by AI. Upstream projects retain their original authorship and licenses. AI output
+can contain mistakes, and passing automated tests is not independent verification.
+Review the source and test it yourself in an isolated demo environment on your own
+hardware before trusting it with accounts, data or live trading. This experimental
+release has not established production readiness.
+
 An experimental source-only launcher, diagnostics suite and native compatibility
 patchset for running a user-obtained Quantower installation through Wine on Linux.
 The toolkit keeps each installation in a dedicated prefix, records bounded local

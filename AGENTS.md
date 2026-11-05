@@ -186,3 +186,11 @@ paths, account state, logs, vendor binaries/fonts/artwork and platform performan
 reports out of Git. Preserve upstream licenses for all native sources. The
 published source must contain enough pinned inputs and instructions to rebuild its
 advertised patches. See SECURITY.md and CONTRIBUTING.md for review expectations.
+
+## AI provenance and user validation
+
+Keep the prominent AI-generation disclosure in the README and release notes.
+Original toolkit code and local patches were largely AI-generated; upstream work
+retains its own attribution. Report concrete checks and their limits. Require users
+to review and individually test an isolated demo setup before relying on the toolkit;
+do not equate test passes with production readiness or trading safety.
