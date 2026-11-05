@@ -36,6 +36,22 @@ are absent, so translations are not rebuilt. These optional omissions do not
 establish compatibility for workloads that require them; inspect the retained
 configure summary when building for a different application.
 
+The portable bundle also carries twelve unchanged DejaVu TrueType faces: four
+styles each of Sans, Serif and Sans Mono. Wine's load_file_system_fonts() scans
+its share/wine/fonts data directory, so these faces do not depend on host font
+installation. Fresh-prefix setup uses Wine's FontSubstitutes registry support
+for Verdana, Arial, Microsoft Sans Serif, Segoe UI, Times New Roman, Courier New
+and Consolas. It also sets those names under the prefix's HKCU Software/Wine/
+Fonts/Replacements key, which Wine DirectWrite reads for system collections;
+GDI FontSubstitutes alone does not provide DirectWrite family aliases. These
+resolve to open DejaVu families; their metrics differ from
+the Microsoft fonts. Existing Wine Tahoma and the legacy raster MS Sans Serif
+behavior remain in place. A separate no-app fixture with empty host Fontconfig
+verified GDI+ family lookup and all four styles for these seven aliases.
+An additional DirectWrite check confirmed the names were absent with GDI-only
+aliases, then present with successful style matches and text layouts after the
+DirectWrite replacements were registered. No host fonts were available in it.
+
 The Xlib 1.8.14 correction moves sequence synchronization before final cached
 resource-ID replenishment. Existing assertions and lock/error paths remain.
 gamescope 3.16.25 includes the upstream static-black-buffer correction and a local
@@ -106,6 +122,32 @@ windows and their linked Wine shell button. The probe's compiled startup/runtime
 code requires the matching MinGW/GCC notices; integration PE files are not part
 of the source checkout or prebuilt runtime payload.
 
+The separate font-probe.cpp checks only the seven setup aliases above and Wine
+Tahoma, each with regular, bold, italic and bold-italic styles. It prints fixed
+requested names and GDI+ status codes as JSON, exits nonzero on a missing family
+(status 14) or style, and never prints a user's font inventory or starts the
+application. Run it manually after setting up a NEW isolated test installation;
+the setup's prefix-scoped aliases must already be registered. Example commands
+from the source checkout (use new private paths):
+
+  TOOLKIT_FONT_PROBE_BUILD=/absolute/path/to/new-private-probe-directory
+  mkdir -m 700 "$TOOLKIT_FONT_PROBE_BUILD"
+  x86_64-w64-mingw32-g++ -std=gnu++17 -O2 -Wall -Wextra -Werror \
+    -fno-exceptions -fno-rtti -static-libgcc -static-libstdc++ \
+    -Wl,--no-insert-timestamp native/font-probe.cpp \
+    -o "$TOOLKIT_FONT_PROBE_BUILD/font-probe.exe" -lgdiplus -lgdi32 -luser32
+
+  TOOLKIT_FONT_TEST_BASE=/absolute/path/to/new-test-installation
+  WINEPREFIX="$TOOLKIT_FONT_TEST_BASE/prefix" \
+    LD_LIBRARY_PATH="$TOOLKIT_FONT_TEST_BASE/runtime-components/x11:$TOOLKIT_FONT_TEST_BASE/runner-quantower/opt/wine-devel/lib" \
+    XLOCALEDIR="$TOOLKIT_FONT_TEST_BASE/runtime-components/x11/share/X11/locale" \
+    "$TOOLKIT_FONT_TEST_BASE/runner-quantower/opt/wine-devel/bin/wine" \
+    "$TOOLKIT_FONT_PROBE_BUILD/font-probe.exe"
+
+This needs a reachable test DISPLAY. Success reports passed=true and zero family
+and style statuses for all eight fixed names. The compiled probe remains private;
+the same MinGW/GCC startup-runtime notice terms apply if it is redistributed.
+
 Validation boundaries
 
 The source preparation checks and offline unit tests establish archive integrity,
@@ -118,6 +160,9 @@ benchmark or production-trading suitability claim is included.
 Primary references:
 https://gitlab.winehq.org/wine/wine/-/wikis/Building-Wine
 https://github.com/wine-mirror/wine/tree/wine-11.20
+https://github.com/wine-mirror/wine/blob/wine-11.20/dlls/win32u/font.c
+https://github.com/wine-mirror/wine/blob/wine-11.20/dlls/gdiplus/font.c
+https://github.com/wine-mirror/wine/blob/wine-11.20/dlls/dwrite/font.c
 https://xorg.freedesktop.org/archive/individual/lib/libX11-1.8.14.tar.xz
 https://github.com/ValveSoftware/gamescope/tree/3.16.25
 https://github.com/ValveSoftware/gamescope/commit/175a67258952ae1c54a85183927b09328d20be2e

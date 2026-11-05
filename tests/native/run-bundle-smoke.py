@@ -157,14 +157,15 @@ def start_xvfb(output):
             os.close(write_fd)
 
 
-def wait_desktop(environment, process):
+def wait_desktop(environment, process, tree_log):
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         if process.poll() is not None:
             raise RuntimeError('Synthetic named desktop exited before it became visible.')
         tree = subprocess.run(['xwininfo', '-root', '-tree'], env=environment, capture_output=True,
                               text=True, timeout=5, check=False)
-        if tree.returncode == 0 and 'AMP-Quantower - Wine desktop' in tree.stdout:
+        tree_log.write_text(tree.stdout + tree.stderr)
+        if tree.returncode == 0 and 'amp-quantower - wine desktop' in tree.stdout.lower():
             return
         time.sleep(.2)
     raise RuntimeError('Synthetic named desktop was not observed; exit the disposable container.')
@@ -190,7 +191,11 @@ def execute(args):
                            WINEDEBUG='-all,+loaddll', WINEDLLOVERRIDES='winemenubuilder.exe=d', LD_DEBUG='libs')
         x11 = runtime_config.apply_wine_library_environment(base, environment)
         wine = base / 'runner-quantower/opt/wine-devel/bin/wine'
-        command([wine, 'wineboot.exe', '--init'], environment, output / 'wineboot.raw.log', args.timeout)
+        # Wine's registration of mscoree requests its optional Mono installer.
+        # This native-only fixture needs neither Mono nor Gecko. Limit their
+        # disabled overrides to prefix bootstrap, then restore normal loading.
+        bootstrap = {**environment, 'WINEDLLOVERRIDES': environment['WINEDLLOVERRIDES'] + ';mscoree,mshtml='}
+        command([wine, 'wineboot.exe', '--init'], bootstrap, output / 'wineboot.raw.log', args.timeout)
         command([wine, 'reg.exe', 'add', r'HKCU\Software\Wine\Explorer\Desktops\AMP-Quantower',
                  '/v', 'EnableShell', '/t', 'REG_DWORD', '/d', '1', '/f'], environment,
                 output / 'desktop-config.raw.log', args.timeout)
@@ -205,7 +210,7 @@ def execute(args):
         with (output / 'desktop.raw.log').open('xb') as stream:
             desktop = subprocess.Popen([str(wine), 'explorer.exe', '/desktop=AMP-Quantower,1280x720'],
                                        env=environment, stdin=subprocess.DEVNULL, stdout=stream, stderr=subprocess.STDOUT)
-        wait_desktop({**os.environ, 'DISPLAY': display}, desktop)
+        wait_desktop({**os.environ, 'DISPLAY': display, 'LC_ALL': 'C'}, desktop, output / 'desktop-tree.raw.log')
         log = output / 'probe-taskbar-64.raw.log'
         command([wine, report['probes']['64']['path'], '--desktop', 'AMP-Quantower', '--taskbar'],
                 environment, log, args.timeout)

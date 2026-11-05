@@ -1,5 +1,8 @@
 """Prepare runtime trees using synthetic files; no compiler or runtime is run."""
 import importlib.util
+import hashlib
+import io
+import json
 import os
 from pathlib import Path
 import shutil
@@ -101,6 +104,112 @@ class RuntimePrepareTests(unittest.TestCase):
                                     ('x86_64-w64-mingw32-strip', 'bin/module.exe')})
         self.assertTrue(all((self.target / name).read_bytes() == data for name, data in fonts.items()))
         self.assertTrue(all((self.source / name).read_bytes() == data for name, data in fonts.items()))
+
+    def font(self, name, data=None):
+        directory = self.root / 'font-inputs'
+        directory.mkdir(exist_ok=True)
+        path = directory / name
+        path.write_bytes(data if data is not None else b'\0\1\0\0' + b'synthetic unchanged TrueType fixture')
+        return path
+
+    def test_add_twelve_font_faces_preserves_bytes_and_records_exact_sources_without_stripping(self):
+        self.target.mkdir()
+        fonts = [self.font(f'{family}-{face}.ttf') for family in ('Sans', 'Serif', 'SansMono')
+                 for face in ('Regular', 'Bold', 'Oblique', 'BoldOblique')]
+        before = {font.name: font.read_bytes() for font in fonts}
+        with mock.patch.object(prepare.subprocess, 'run', side_effect=AssertionError('No stripping or runtime execution')):
+            mapping = prepare.add_fonts(self.target, fonts)
+        self.assertEqual(len(mapping), 12)
+        for entry, font in zip(mapping, fonts):
+            self.assertEqual(entry['path'], 'share/wine/fonts/' + font.name)
+            self.assertEqual(entry['system_path'], str(font.resolve()))
+            self.assertEqual(entry['sha256'], hashlib.sha256(before[font.name]).hexdigest())
+            self.assertEqual((self.target / entry['path']).read_bytes(), before[font.name])
+            self.assertEqual(font.read_bytes(), before[font.name])
+
+    def test_font_batch_is_fully_validated_before_any_destination_creation(self):
+        self.target.mkdir()
+        good = self.font('good.ttf')
+        bad = self.font('bad.ttf', b'OTTO' + b'not TrueType sfnt')
+        with self.assertRaisesRegex(ValueError, 'TrueType sfnt'):
+            prepare.add_fonts(self.target, [good, bad])
+        self.assertFalse((self.target / 'share').exists())
+        oversized = self.font('oversized.ttf')
+        with oversized.open('ab') as stream:
+            stream.truncate(prepare.MAX_FONT_BYTES + 1)
+        with self.assertRaisesRegex(ValueError, '32 MiB'):
+            prepare.add_fonts(self.target, [oversized])
+        fifo = self.root / 'pipe.ttf'
+        os.mkfifo(fifo)
+        with self.assertRaisesRegex(ValueError, 'regular file'):
+            prepare.add_fonts(self.target, [fifo])
+        self.assertFalse((self.target / 'share').exists())
+
+    def test_font_source_and_destination_symlinks_are_refused(self):
+        self.target.mkdir()
+        good = self.font('good.ttf')
+        alias = self.root / 'alias.ttf'
+        alias.symlink_to(good)
+        with self.assertRaisesRegex(ValueError, 'symlinks'):
+            prepare.add_fonts(self.target, [alias])
+        alias_parent = self.root / 'alias-parent'
+        alias_parent.symlink_to(good.parent, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'symlinks'):
+            prepare.add_fonts(self.target, [alias_parent / good.name])
+        outside = self.root / 'outside'
+        outside.mkdir()
+        (self.target / 'share').symlink_to(outside, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'symlinks'):
+            prepare.add_fonts(self.target, [good])
+        self.assertEqual(list(outside.iterdir()), [])
+
+    def test_font_conflicts_and_duplicate_names_are_refused_before_copy(self):
+        self.target.mkdir()
+        good = self.font('good.ttf')
+        other = self.font('other.ttf')
+        directory = self.target / 'share/wine/fonts'
+        directory.mkdir(parents=True)
+        existing = directory / 'GOOD.TTF'
+        existing.write_bytes(b'preserve existing font')
+        with self.assertRaisesRegex(FileExistsError, 'already exists'):
+            prepare.add_fonts(self.target, [other, good])
+        self.assertFalse((directory / other.name).exists())
+        self.assertEqual(existing.read_bytes(), b'preserve existing font')
+        existing.unlink()
+        with self.assertRaisesRegex(ValueError, 'unique'):
+            prepare.add_fonts(self.target, [good, good])
+        self.assertEqual(list(directory.iterdir()), [])
+
+    def test_fonts_cannot_be_added_inside_installed_runtimes_or_wine_prefixes(self):
+        good = self.font('good.ttf')
+        cases = [('installed', 'prefix/user.reg', 'runner/opt/wine'),
+                 ('wine-prefix', 'user.reg', 'drive_c/runtime'),
+                 ('staged-install', 'runtime-components/manifest.json', 'runner/opt/wine')]
+        for name, marker, location in cases:
+            base = self.root / name
+            runtime = base / location
+            runtime.mkdir(parents=True)
+            state = base / marker
+            state.parent.mkdir(parents=True, exist_ok=True)
+            state.write_bytes(b'private state preserved')
+            with self.assertRaisesRegex(ValueError, 'never an installed runtime'):
+                prepare.add_fonts(runtime, [good])
+            self.assertFalse((runtime / 'share').exists())
+            self.assertEqual(state.read_bytes(), b'private state preserved')
+
+    def test_prepare_cli_repeated_font_inputs_return_mapping(self):
+        self.file('lib/runtime.so')
+        fonts = [self.font('first.ttf'), self.font('second.ttf')]
+        output = io.StringIO()
+        arguments = ['--source', str(self.source), '--target', str(self.target)]
+        for font in fonts:
+            arguments += ['--font', str(font)]
+        with mock.patch('sys.stdout', output):
+            prepare.main(arguments)
+        report = json.loads(output.getvalue())
+        self.assertEqual(len(report['fonts']), 2)
+        self.assertTrue(all((self.target / item['path']).read_bytes() == font.read_bytes()
+                            for item, font in zip(report['fonts'], fonts)))
 
 
 if __name__ == '__main__':

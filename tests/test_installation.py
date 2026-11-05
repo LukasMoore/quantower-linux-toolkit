@@ -242,6 +242,36 @@ class InstallationTests(unittest.TestCase):
                 installer.extract_application(self.target, {}, io.BytesIO(), '1.147.5')
         self.assertFalse(destination.exists())
 
+    def test_bootstrap_overrides_and_complete_open_font_families_are_scoped(self):
+        # No real Wine: this records process arguments/environment and imitates
+        # only prefix initialization, leaving ownership to isolated mocks.
+        code = '#!/usr/bin/env python3\n' + textwrap.dedent('''
+            import json, os, pathlib, sys
+            prefix = pathlib.Path(os.environ['WINEPREFIX'])
+            with (prefix.parent / 'setup-commands.jsonl').open('a') as output:
+                output.write(json.dumps({'argv': sys.argv[1:], 'overrides': os.environ.get('WINEDLLOVERRIDES')}) + '\\n')
+            if sys.argv[1] == 'wineboot.exe':
+                (prefix / 'user.reg').write_text('synthetic registry')
+        ''')
+        (self.wine / 'bin/wine').write_text(code)
+        fonts = self.wine / 'share/wine/fonts'
+        fonts.mkdir(parents=True)
+        for name in installer.FONT_FALLBACKS[0][1]:
+            (fonts / name).write_bytes(b'synthetic font')
+        (fonts / 'DejaVuSansMono.ttf').write_bytes(b'incomplete family')
+        with self.isolated_process_discovery():
+            installer.assemble(self.options('--initialize-prefix'))
+        commands = [json.loads(line) for line in (self.target / 'setup-commands.jsonl').read_text().splitlines()]
+        self.assertIn('mscoree,mshtml=', commands[0]['overrides'])
+        self.assertTrue(all(command['overrides'] == 'winemenubuilder.exe=d' for command in commands[1:]))
+        alias_commands = [command['argv'] for command in commands if 'FontSubstitutes' in ' '.join(command['argv'])]
+        self.assertEqual({args[args.index('/v') + 1] for args in alias_commands}, set(installer.FONT_FALLBACKS[0][2]))
+        dwrite_commands = [command['argv'] for command in commands if r'Wine\Fonts\Replacements' in ' '.join(command['argv'])]
+        self.assertEqual({args[args.index('/v') + 1] for args in dwrite_commands}, set(installer.FONT_FALLBACKS[0][2]))
+        (self.target / 'runner-quantower/opt/wine-devel/share/wine/fonts/DejaVuSans.ttf').write_bytes(b'changed')
+        with self.assertRaisesRegex(RuntimeError, 'failed verification'):
+            installer.profile_manager.load(self.target)
+
 
 class FetchTests(unittest.TestCase):
     def setUp(self):

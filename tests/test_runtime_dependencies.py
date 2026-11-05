@@ -112,6 +112,17 @@ class RuntimeDependencyTests(unittest.TestCase):
         self.assertNotIn('LD_PRELOAD', environment)
         self.assertEqual(environment['LD_LIBRARY_PATH'], str(self.root / 'lib'))
 
+    def test_wine_internal_unix_siblings_are_searchable_without_becoming_foreign_files(self):
+        native = self.elf('stage/lib/wine/x86_64-unix/ntdll.so', b'Wine internal Unix module')
+        self.closures[str(native)] = [native]
+        self.closures[str(self.entry)].append(native)
+        result = self.collect()
+        self.assertEqual(result['files'], [])
+        expected = os.pathsep.join((str(self.root / 'lib'), str(native.parent)))
+        for args, options in self.calls:
+            if args[0] == 'lddtree':
+                self.assertEqual(options['env']['LD_LIBRARY_PATH'], expected)
+
     def test_only_explicit_missing_optional_dlopen_soname_is_reported(self):
         config = self.directory / 'config.h'
         config.write_text('#define SONAME_LIBODBC "libodbc.so"\n')

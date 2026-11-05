@@ -194,7 +194,7 @@ static TaskbarResult taskbar_probe() {
         DWORD target_pid=0; GetWindowThreadProcessId(app,&target_pid);
         if(!lookup.button || target_pid!=GetCurrentProcessId())goto done;
         DWORD_PTR ignored=0;
-        if(!SendMessageTimeoutW(lookup.button,BM_CLICK,0,0,SMTO_ABORTIFHUNG|SMTO_BLOCK,2000,&ignored))goto done;
+        if(!SendMessageTimeoutW(lookup.button,BM_CLICK,0,0,SMTO_ABORTIFHUNG,2000,&ignored))goto done;
         result.restored=pump_until(restored,app,2000);
         if(GetWindowRect(app,&after))result.bounds_preserved=EqualRect(&before,&after)!=FALSE;
     }

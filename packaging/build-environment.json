@@ -36,5 +36,14 @@
     "memory_plus_swap_limit_gib": 7,
     "pids_limit": 1024,
     "resume_policy": "Only identity-verified isolated make was interrupted; captured in-progress targets were removed and rebuilt. Completed objects were retained."
+  },
+  "font_resources": {
+    "recipe": "packaging/Dockerfile.debian13-fonts",
+    "source_image_id": "sha256:875b120c234f460036d4c5373e831ed56533e1692c433b2c40141705f80b97a6",
+    "additional_package": "fonts-dejavu-extra=2.37-8",
+    "source_package": "fonts-dejavu=2.37-8",
+    "copied_faces": 12,
+    "scope": "Additional unchanged DejaVu Sans, Serif and Sans Mono data files; the Wine compiler image and its package inventory remain unchanged.",
+    "build_command": "docker build --platform linux/amd64 -f packaging/Dockerfile.debian13-fonts -t quantower-toolkit-fonts:debian13-20261105 ."
   }
 }

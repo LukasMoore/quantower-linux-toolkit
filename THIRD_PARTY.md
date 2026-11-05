@@ -10,7 +10,8 @@ proprietary applications, or separately installed runtime libraries.
 | gamescope-derived patches | BSD-2-Clause core, with additional BSD-3-Clause notices in the pinned upstream license |
 | X.Org libX11-derived patches | Upstream permissive notices; retain the complete pinned `COPYING` text |
 | DXVK | zlib license for the pinned upstream runtime; bundled releases include its notice and matching source identity |
-| innoextract | GPL-3.0-or-later; bundled releases include the exact Debian source package and its notices |
+| innoextract | Upstream zlib/libpng license with preserved component notices; bundled releases include the exact Debian source package |
+| DejaVu fonts | Original Bitstream/DejaVu-specific font notices retained; unmodified open font files and exact Debian sources accompany the runtime. The root MIT license does not relicense these fonts |
 | Other private userspace libraries and Xwayland | Exact versions, component licenses, notices and Debian source-package identities are recorded in each runtime bundle |
 | Quantower, Windows .NET Desktop Runtime installers and vendor fonts/artwork | Obtained separately from their publishers under applicable terms; these files are excluded from runtime and source bundles |
 

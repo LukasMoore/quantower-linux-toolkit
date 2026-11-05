@@ -53,6 +53,13 @@ and ANGLE resources only when its exact CEF engine matches the installed app.
 Existing differing resource bytes are refused. It waits for confirmed guarded
 setup cleanup before taking the separate inactive-prefix repair lock.
 
+The runtime includes unmodified open DejaVu font families. Fresh-prefix setup
+maps common Windows family names such as Verdana to these replacements through
+Wine's font-substitution registry. Microsoft font files are not bundled. Text
+metrics and layout can differ from Windows. Wine's optional Mono/Gecko downloads
+are disabled only during first prefix bootstrap; Microsoft .NET and the app use
+the normal DLL selection afterward.
+
 `--profile auto` selects GPU mode only when a host Wayland socket and Vulkan loader
 are discoverable; otherwise it selects compatible mode. This prerequisite check
 does not prove a GPU is compatible. Choose `--profile compatible` explicitly for

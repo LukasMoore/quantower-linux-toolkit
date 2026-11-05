@@ -73,6 +73,8 @@ without a broken pipe or SIGPIPE. Preserve this design.
 | `logs/sessions/<ID>/native-assert/` | Optional installed assertion tracer's crash metadata; not complete memory dumps |
 | `logs/sessions/<ID>/python-fault.log` | Fatal Python diagnostics and explicitly requested supervisor thread dumps; normally empty |
 | `logs/launch.lock`, `logs/session-processes.json` | Live ownership state; never rotate/delete while used; private ledger/token excluded from support archives |
+| `logs/setup.raw.log` | Private Wine/.NET/native-extraction output for new-prefix setup; preserved on failure, no automatic rotation |
+| `logs/font-backups/` | Explicit local icon-repair transaction records and original private font bytes; never publish or auto-delete |
 | `prefix/drive_c/AMPQuantowerInstalled/Logs/Serilog/*.slog` | Vendor-managed application logs, left unchanged |
 | `prefix/drive_c/AMPQuantowerInstalled/Logs/Cef/CefLogs.log` | Vendor embedded-browser log; support collection checks known alternate layouts too |
 | `logs/gpu/`, `logs/native-assert/` | Legacy diagnostic locations, if present |

@@ -26,6 +26,17 @@ SOURCE_FILES = ('launch.sh', 'render-launch.sh', 'application_runtime.py', 'diag
                 'select-profile.py', 'doctor.py', 'gpu-dxvk.conf', 'AGENTS.md', 'README.md',
                 'SECURITY.md', 'CONTRIBUTING.md', 'launcher-config.example.json', 'LICENSE', 'THIRD_PARTY.md')
 
+# Fresh-prefix compatibility mappings use unmodified open fonts, not Microsoft
+# font bytes. Only enable a family when all four bundled styles are available.
+FONT_FALLBACKS = (
+    ('DejaVu Sans', ('DejaVuSans.ttf', 'DejaVuSans-Bold.ttf', 'DejaVuSans-Oblique.ttf', 'DejaVuSans-BoldOblique.ttf'),
+     ('Verdana', 'Arial', 'Microsoft Sans Serif', 'Segoe UI')),
+    ('DejaVu Serif', ('DejaVuSerif.ttf', 'DejaVuSerif-Bold.ttf', 'DejaVuSerif-Italic.ttf', 'DejaVuSerif-BoldItalic.ttf'),
+     ('Times New Roman',)),
+    ('DejaVu Sans Mono', ('DejaVuSansMono.ttf', 'DejaVuSansMono-Bold.ttf', 'DejaVuSansMono-Oblique.ttf', 'DejaVuSansMono-BoldOblique.ttf'),
+     ('Courier New', 'Consolas')),
+)
+
 
 def sha(path):
     with Path(path).open('rb') as stream:
@@ -182,6 +193,11 @@ def assemble(args):
                 with file.open('rb') as stream:
                     if stream.read(4) == b'\x7fELF':
                         pin(file)
+        for _, files, _ in FONT_FALLBACKS:
+            for name in files:
+                file = bundle / 'share/wine/fonts' / name
+                if file.is_file():
+                    pin(file)
         if extras['x11_home']:
             directory = components / 'x11'
             directory.mkdir(mode=0o700)
@@ -339,7 +355,7 @@ def initialize(target, run_installers=False, *, setup_lock=None, extract_app=Fal
                  'WINEDLLPATH', 'WINELOADER', 'WINESERVER', 'LD_PRELOAD', 'LD_LIBRARY_PATH'):
         env.pop(name, None)
     env.update(WINEPREFIX=str(target / 'prefix'), WINEARCH='win64', WINEDEBUG='-all,err+all,warn+all',
-               WINEDLLOVERRIDES='winemenubuilder.exe=d', QUANTOWER_LAUNCH_SESSION=session.token)
+               WINEDLLOVERRIDES='winemenubuilder.exe=d;mscoree,mshtml=d', QUANTOWER_LAUNCH_SESSION=session.token)
     runtime_config.apply_wine_library_environment(target, env)
     wine = target / 'runner-quantower/opt/wine-devel/bin/wine'
     records = []
@@ -360,9 +376,22 @@ def initialize(target, run_installers=False, *, setup_lock=None, extract_app=Fal
                 raise RuntimeError('Setup step failed: ' + label + '; inspect logs/setup.raw.log.')
             records.append({'step': label, 'exit_code': child.returncode})
         execute(['wineboot.exe', '--init'], 'prefix initialization', 180)
+        # These optional first-run installers are unnecessary for our separately
+        # installed Microsoft .NET/CEF. Do not disable their DLLs for later setup.
+        env['WINEDLLOVERRIDES'] = 'winemenubuilder.exe=d'
         # Native taskbar stays scoped to this named desktop, with no host settings.
         execute(['reg.exe', 'add', r'HKCU\Software\Wine\Explorer\Desktops\AMP-Quantower',
                  '/v', 'EnableShell', '/t', 'REG_DWORD', '/d', '1', '/f'], 'desktop shell configuration', 30)
+        fonts = target / 'runner-quantower/opt/wine-devel/share/wine/fonts'
+        for family, files, aliases in FONT_FALLBACKS:
+            if all((fonts / name).is_file() for name in files):
+                for alias in aliases:
+                    execute(['reg.exe', 'add', r'HKLM\Software\Microsoft\Windows NT\CurrentVersion\FontSubstitutes',
+                             '/v', alias, '/t', 'REG_SZ', '/d', family, '/f'],
+                            'open font fallback: ' + alias, 30)
+                    execute(['reg.exe', 'add', r'HKCU\Software\Wine\Fonts\Replacements',
+                             '/v', alias, '/t', 'REG_SZ', '/d', family, '/f'],
+                            'DirectWrite font fallback: ' + alias, 30)
         if run_installers:
             execute(['Z:' + str(target / 'installers/WindowsDesktopRuntime.exe').replace('/', '\\'),
                      '/install', '/quiet', '/norestart'], '.NET Desktop Runtime', 900,

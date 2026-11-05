@@ -1,0 +1,7 @@
+# Additional font-resource source layer; the Wine compiler image stays unchanged.
+ARG TOOLKIT_BUILD_BASE=quantower-toolkit-builder:debian13-20261105
+FROM ${TOOLKIT_BUILD_BASE}
+USER root
+RUN apt-get install -y --no-install-recommends fonts-dejavu-extra=2.37-8
+USER builder
+WORKDIR /work

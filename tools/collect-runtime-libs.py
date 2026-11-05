@@ -55,7 +55,11 @@ def cache_libraries(runner=subprocess.run):
 def dependencies(path, root, runner=subprocess.run):
     environment = os.environ.copy()
     environment.pop('LD_PRELOAD', None)
-    environment['LD_LIBRARY_PATH'] = str(root / 'lib')
+    library_paths = [root / 'lib']
+    wine_unix = root / 'lib/wine/x86_64-unix'
+    if wine_unix.is_dir():
+        library_paths.append(wine_unix)
+    environment['LD_LIBRARY_PATH'] = os.pathsep.join(map(str, library_paths))
     result = runner(['lddtree', '-l', str(path)], env=environment, capture_output=True,
                     text=True, check=True)
     paths = []
