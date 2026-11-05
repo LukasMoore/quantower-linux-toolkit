@@ -25,6 +25,17 @@ class CleanupTests(unittest.TestCase):
         wine.start()
         self.addCleanup(wine.stop)
 
+    def test_unreadable_recorded_process_blocks_observation_without_losing_identity(self):
+        identity = supervisor.ProcessIdentity(999999999, 1001, os.getuid())
+        self.session.token = 'a' * 32
+        self.session.identities = {identity}
+        with mock.patch.object(Path, 'iterdir', return_value=[Path('/proc/999999999')]), \
+                mock.patch.object(supervisor, 'owned_identity', side_effect=PermissionError('protected process')):
+            with self.assertRaisesRegex(RuntimeError, 'Cannot verify a recorded session process'):
+                self.session.observe()
+        self.assertEqual(self.session.identities, {identity})
+        self.assertEqual(self.session.sent_signals, set())
+
     def test_wine_selection_requires_exact_dedicated_loader_paths(self):
         unrelated = supervisor.ProcessIdentity(103, 1003, os.getuid())
         runtime = self.base / 'runner-quantower/opt/wine-devel'

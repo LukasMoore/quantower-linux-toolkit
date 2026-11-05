@@ -1,5 +1,6 @@
 """Installation tests use fake runtimes and never start Wine or the application."""
 import fcntl
+import contextlib
 import hashlib
 import importlib.util
 import io
@@ -40,6 +41,25 @@ class InstallationTests(unittest.TestCase):
 
     def options(self, *extra):
         return installer.parser().parse_args(['--target', str(self.target), '--wine-home', str(self.wine), *extra])
+
+    @contextlib.contextmanager
+    def isolated_process_discovery(self):
+        # These fixtures exercise setup commands and filesystem effects. Process
+        # identity/permission behavior belongs to the mocked cleanup regression
+        # suite, not to whichever processes happen to be on a CI host.
+        def observe(session):
+            session.identities.clear()
+            session.save()
+            return set()
+        with (
+            mock.patch.object(installer.supervisor, 'prefix_processes', return_value=set()),
+            mock.patch.object(installer.profile_manager, 'no_running_prefix'),
+            mock.patch.object(installer.supervisor.SessionProcesses, 'remember_child'),
+            mock.patch.object(installer.supervisor.SessionProcesses, 'observe', observe),
+            mock.patch.object(installer.supervisor.SessionProcesses, 'signal_identity',
+                              side_effect=AssertionError('Setup fixture must not signal host processes')),
+        ):
+            yield
 
     def test_clean_install_is_relocatable_pinned_and_does_not_execute(self):
         with mock.patch.object(installer.subprocess, 'Popen', side_effect=AssertionError('No process may run')):
@@ -154,7 +174,8 @@ class InstallationTests(unittest.TestCase):
 
     def test_fake_wine_exercises_prefix_and_gui_setup_without_real_wine(self):
         # A synthetic local executable imitates only the filesystem effects of
-        # setup. It proves command/exit handling and ledger cleanup end-to-end.
+        # setup. It proves command/exit handling and ledger persistence;
+        # identity discovery is isolated and tested separately.
         code = '#!/usr/bin/env python3\n' + textwrap.dedent('''
             import os, pathlib, sys
             prefix = pathlib.Path(os.environ['WINEPREFIX'])
@@ -177,16 +198,17 @@ class InstallationTests(unittest.TestCase):
         file = self.root / 'synthetic-installer.exe'
         file.write_bytes(b'synthetic setup')
         pin = hashlib.sha256(file.read_bytes()).hexdigest()
-        result = installer.assemble(self.options('--app-installer', str(file), '--app-installer-sha256', pin,
-                                                '--desktop-runtime-installer', str(file), '--desktop-runtime-sha256', pin,
-                                                '--initialize-prefix', '--run-installers'))
+        with self.isolated_process_discovery():
+            result = installer.assemble(self.options('--app-installer', str(file), '--app-installer-sha256', pin,
+                                                    '--desktop-runtime-installer', str(file), '--desktop-runtime-sha256', pin,
+                                                    '--initialize-prefix', '--run-installers'))
         self.assertTrue(result['prefix_initialized'])
         self.assertTrue(result['setup_cleanup_complete'])
         self.assertEqual([x['exit_code'] for x in result['setup_steps']], [0, 0, 194, 0])
         self.assertEqual(json.loads((self.target / 'logs/session-processes.json').read_text())['processes'], [])
 
     def test_failed_setup_keeps_its_target_and_private_diagnostic_log(self):
-        with self.assertRaisesRegex(RuntimeError, 'Setup step failed'):
+        with self.isolated_process_discovery(), self.assertRaisesRegex(RuntimeError, 'Setup step failed'):
             installer.assemble(self.options('--initialize-prefix'))
         self.assertTrue(self.target.is_dir())
         self.assertTrue((self.target / 'logs/setup.raw.log').is_file())
