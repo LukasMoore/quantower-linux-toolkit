@@ -65,6 +65,7 @@ class RuntimeDependencyTests(unittest.TestCase):
         names = ['ld-linux-x86-64.so.2', 'libc.so.6', 'libm.so.6', 'libpthread.so.0',
                  'libmvec.so.1', 'libthread_db.so.1', 'libBrokenLocale.so.1',
                  'libGL.so.1', 'libEGL.so.1', 'libGLX_mesa.so.0', 'libGLdispatch.so.0',
+                 'libEGL_mesa.so.0', 'libEGL_nvidia.so.0', 'libglapi.so.0', 'libgallium-25.so',
                  'libdrm_amdgpu.so.1', 'libvulkan.so.1', 'libnvidia-glcore.so.1',
                  'libva-drm.so.2', 'libOpenCL.so.1']
         external = [self.elf('system/' + name) for name in names]

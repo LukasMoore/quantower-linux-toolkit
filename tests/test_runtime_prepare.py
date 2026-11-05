@@ -3,8 +3,10 @@ import importlib.util
 import os
 from pathlib import Path
 import shutil
+import struct
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('prepare_runtime_test', ROOT / 'tools/prepare-runtime.py')
@@ -74,6 +76,31 @@ class RuntimePrepareTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'new directory separate'):
                 prepare.prepare(self.source, target)
         self.assertEqual(sentinel.read_bytes(), b'keep existing bytes')
+
+    def test_strip_distinguishes_pe_modules_from_ne_fonts_and_invalid_mz_files(self):
+        def executable(signature, offset=64, size=96):
+            data = bytearray(size)
+            data[:2] = b'MZ'
+            data[60:64] = struct.pack('<I', offset)
+            if offset <= size - len(signature):
+                data[offset:offset + len(signature)] = signature
+            return bytes(data)
+        self.file('lib/module.so', b'\x7fELFsynthetic module')
+        self.file('bin/module.exe', executable(b'PE\0\0'))
+        fonts = {'share/wine/fonts/fixture.fon': executable(b'NE\0\0'),
+                 'share/wine/fonts/truncated.fon': b'MZshort',
+                 'share/wine/fonts/invalid-offset.fon': executable(b'PE\0\0', offset=4096)}
+        for name, data in fonts.items():
+            self.file(name, data)
+        with mock.patch.object(prepare.subprocess, 'run') as run:
+            result = prepare.prepare(self.source, self.target, strip=True)
+        self.assertEqual(result['stripped'], {'elf': 1, 'pe': 1})
+        commands = {(call.args[0][0], Path(call.args[0][-1]).relative_to(self.target).as_posix())
+                    for call in run.call_args_list}
+        self.assertEqual(commands, {('strip', 'lib/module.so'),
+                                    ('x86_64-w64-mingw32-strip', 'bin/module.exe')})
+        self.assertTrue(all((self.target / name).read_bytes() == data for name, data in fonts.items()))
+        self.assertTrue(all((self.source / name).read_bytes() == data for name, data in fonts.items()))
 
 
 if __name__ == '__main__':

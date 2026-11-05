@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import struct
 import subprocess
 
 
@@ -31,10 +32,17 @@ def prepare(source, target, strip=False):
                 continue
             with file.open('rb') as stream:
                 magic = stream.read(4)
+                pe = False
+                if magic[:2] == b'MZ' and file.stat().st_size >= 64:
+                    stream.seek(60)
+                    offset = struct.unpack('<I', stream.read(4))[0]
+                    if offset <= file.stat().st_size - 4:
+                        stream.seek(offset)
+                        pe = stream.read(4) == b'PE\0\0'
             if magic == b'\x7fELF':
                 subprocess.run(['strip', '--strip-debug', str(file)], check=True)
                 stripped['elf'] += 1
-            elif magic[:2] == b'MZ':
+            elif pe:
                 subprocess.run(['x86_64-w64-mingw32-strip', '--strip-debug', str(file)], check=True)
                 stripped['pe'] += 1
     return {'pruned': ['include/', 'pkgconfig/', 'man/', '*.a', '*.la'],
