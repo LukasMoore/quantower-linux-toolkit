@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+import stat
 import tempfile
 import textwrap
 import unittest
@@ -128,6 +129,109 @@ class InstallationTests(unittest.TestCase):
         self.assertFalse(Path(os.readlink(link)).is_absolute())
         self.assertTrue(link.resolve().is_relative_to(self.target))
         self.assertEqual(link.read_text(), 'data')
+
+    def fixture_writable(self, root):
+        if root.exists():
+            root.chmod(0o700)
+            for path in root.rglob('*'):
+                if not path.is_symlink():
+                    path.chmod(0o700 if path.is_dir() else 0o600)
+
+    def readonly_fixture(self, root):
+        for path in root.rglob('*'):
+            if not path.is_symlink():
+                path.chmod(0o555 if path.is_dir() or path.stat().st_mode & 0o111 else 0o444)
+        root.chmod(0o555)
+        self.addCleanup(self.fixture_writable, root)
+
+    def fixture_snapshot(self, root):
+        result = {}
+        for path in (root, *root.rglob('*')):
+            name = path.relative_to(root).as_posix()
+            if path.is_symlink():
+                result[name] = ('link', os.readlink(path))
+            else:
+                result[name] = (stat.S_IMODE(path.stat().st_mode), path.read_bytes() if path.is_file() else None)
+        return result
+
+    def test_readonly_runtime_sources_stage_writable_private_copies_without_source_changes(self):
+        library = self.wine / 'lib/fixture.so'
+        library.parent.mkdir()
+        library.write_bytes(b'\x7fELF synthetic runtime')
+        (self.wine / 'lib/absolute.so').symlink_to(library)
+        game = self.root / 'gamescope-source'
+        (game / 'bin').mkdir(parents=True)
+        for name in ('gamescope', 'gamescope-brokey', 'Xwayland'):
+            path = game / 'bin' / name
+            path.write_bytes(('synthetic ' + name).encode())
+            path.chmod(0o700)
+        x11 = self.root / 'x11-source'
+        (x11 / 'lib').mkdir(parents=True)
+        for name in ('libX11.so.6', 'libX11-xcb.so.1', 'libfixture.so.1'):
+            (x11 / 'lib' / name).write_bytes(b'\x7fELF synthetic ' + name.encode())
+        locale = x11 / 'share/X11/locale/fixture/Compose'
+        locale.parent.mkdir(parents=True)
+        locale.write_bytes(b'synthetic locale data')
+        dxvk = self.root / 'd3d9.dll'
+        dxvk.write_bytes(b'synthetic DXVK')
+        dxvk.chmod(0o444)
+        self.addCleanup(dxvk.chmod, 0o600)
+        roots = (self.wine, game, x11)
+        for root in roots:
+            self.readonly_fixture(root)
+        # Privileged bits from a user-supplied source must not reach its copy.
+        (self.wine / 'bin/wine').chmod(0o4555)
+        before = {root: self.fixture_snapshot(root) for root in roots}
+        with mock.patch.object(installer.subprocess, 'Popen', side_effect=AssertionError('No runtime may execute')):
+            installer.assemble(self.options('--profile', 'gpu', '--gamescope-home', str(game),
+                                            '--x11-home', str(x11), '--dxvk-d3d9', str(dxvk)))
+        self.assertEqual({root: self.fixture_snapshot(root) for root in roots}, before)
+        self.assertEqual(installer.profile_manager.load(self.target), 'gpu')
+        copied = self.target / 'runner-quantower/opt/wine-devel'
+        self.assertEqual(stat.S_IMODE((copied / 'bin/wine').stat().st_mode), 0o755)
+        self.assertFalse(Path(os.readlink(copied / 'lib/absolute.so')).is_absolute())
+        self.assertEqual((copied / 'lib/absolute.so').read_bytes(), library.read_bytes())
+        self.assertEqual((self.target / 'gamescope/files/bin/gamescope-brokey').read_bytes(),
+                         (game / 'bin/gamescope').read_bytes())
+        self.assertEqual((self.target / 'runtime-components/x11/libX11.so.6').read_bytes(),
+                         (x11 / 'lib/libX11.so.6').read_bytes())
+        self.assertTrue((self.target / 'runtime-components/x11/share/X11/locale/fixture/Compose').is_file())
+        for path in self.target.rglob('*'):
+            if not path.is_symlink():
+                mode = stat.S_IMODE(path.stat().st_mode)
+                self.assertFalse(mode & 0o7000, str(path))
+                self.assertTrue(mode & 0o200, str(path))
+        self.assertFalse((self.target / 'prefix/user.reg').exists())
+
+    def test_copy_tree_refuses_existing_destination_without_changing_its_permissions(self):
+        self.target.mkdir()
+        sentinel = self.target / 'keep'
+        sentinel.write_bytes(b'keep existing data')
+        sentinel.chmod(0o400)
+        self.target.chmod(0o500)
+        self.addCleanup(self.fixture_writable, self.target)
+        before = self.fixture_snapshot(self.target)
+        with self.assertRaises(FileExistsError):
+            installer.copy_tree(self.wine, self.target)
+        self.assertEqual(self.fixture_snapshot(self.target), before)
+
+    def test_partial_readonly_copy_is_removed_without_masking_the_copy_error(self):
+        child = self.wine / 'a-directory/file'
+        child.parent.mkdir()
+        child.write_bytes(b'copied before failure')
+        (self.wine / 'z-failure').write_bytes(b'trigger failure')
+        self.readonly_fixture(self.wine)
+        before = self.fixture_snapshot(self.wine)
+        original = installer.copy_owned_file
+        def fail(source, destination):
+            if Path(source).name == 'z-failure':
+                raise OSError('simulated copy failure')
+            return original(source, destination)
+        with mock.patch.object(installer, 'copy_owned_file', side_effect=fail):
+            with self.assertRaisesRegex(OSError, 'simulated copy failure'):
+                installer.copy_tree(self.wine, self.target)
+        self.assertFalse(self.target.exists())
+        self.assertEqual(self.fixture_snapshot(self.wine), before)
 
     def test_installer_checksums_are_required_and_only_verified_files_are_staged(self):
         file = self.root / 'vendor.exe'

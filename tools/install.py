@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -53,16 +54,51 @@ def validate_directory(path):
     return path
 
 
+def copy_owned_file(source, destination):
+    """Copy bytes into this installation's new tree without privileged modes."""
+    source, destination = Path(source), Path(destination)
+    if destination.is_symlink():
+        raise ValueError('An installer copy destination must not be a symlink.')
+    info = source.stat()
+    shutil.copyfile(source, destination)
+    destination.chmod((stat.S_IMODE(info.st_mode) & 0o777) | 0o600)
+    os.utime(destination, ns=(info.st_atime_ns, info.st_mtime_ns))
+    return str(destination)
+
+
+def writable_owned_tree(destination):
+    """Normalize only a reserved new copy; never follow a runtime link."""
+    for entry in (destination, *destination.rglob('*')):
+        if entry.is_symlink():
+            continue
+        mode = stat.S_IMODE(entry.stat().st_mode) & 0o777
+        entry.chmod(mode | 0o600 | (0o100 if entry.is_dir() else 0))
+
+
 def copy_tree(source, destination):
-    """Keep relocatable in-tree links; reject external links and rewrite absolute ones."""
-    source = validate_directory(source)
-    shutil.copytree(source, destination, symlinks=True)
-    for entry in destination.rglob('*'):
-        if entry.is_symlink() and Path(os.readlink(entry)).is_absolute():
-            original = source / entry.relative_to(destination)
-            relative = original.resolve(strict=True).relative_to(source)
-            entry.unlink()
-            entry.symlink_to(os.path.relpath(destination / relative, entry.parent))
+    """Copy into a reserved new tree, retaining contained relocatable links."""
+    source, destination = validate_directory(source), Path(destination)
+    # Reserve before normalization so an existing destination is never chmodded.
+    destination.mkdir(parents=True, mode=0o700)
+    try:
+        shutil.copytree(source, destination, symlinks=True, dirs_exist_ok=True,
+                        copy_function=copy_owned_file)
+        writable_owned_tree(destination)
+        for entry in destination.rglob('*'):
+            if entry.is_symlink() and Path(os.readlink(entry)).is_absolute():
+                original = source / entry.relative_to(destination)
+                relative = original.resolve(strict=True).relative_to(source)
+                entry.unlink()
+                entry.symlink_to(os.path.relpath(destination / relative, entry.parent))
+    except BaseException as error:
+        try:
+            # copytree may have already applied read-only directory metadata
+            # before a later copy failed. Repair only our reserved subtree.
+            writable_owned_tree(destination)
+            shutil.rmtree(destination)
+        except OSError as cleanup_error:
+            error.add_note('The new partial runtime copy could not be removed: ' + str(cleanup_error))
+        raise
 
 
 def find_x11(source, name):
@@ -160,11 +196,11 @@ def assemble(args):
     setup_lock = None
     try:
         for name in SOURCE_FILES:
-            shutil.copy2(ROOT / name, temporary / name)
+            copy_owned_file(ROOT / name, temporary / name)
         helpers = temporary / 'tools'
         helpers.mkdir(mode=0o700)
-        shutil.copy2(ROOT / 'tools/isolate-icon-fonts.py', helpers / 'isolate-icon-fonts.py')
-        shutil.copy2(ROOT / 'tools/restore-cef-resources.py', helpers / 'restore-cef-resources.py')
+        copy_owned_file(ROOT / 'tools/isolate-icon-fonts.py', helpers / 'isolate-icon-fonts.py')
+        copy_owned_file(ROOT / 'tools/restore-cef-resources.py', helpers / 'restore-cef-resources.py')
         if (ROOT / 'third_party').is_dir():
             copy_tree(ROOT / 'third_party', temporary / 'third_party')
         for name in ('launch.sh', 'render-launch.sh'):
@@ -202,7 +238,7 @@ def assemble(args):
             directory = components / 'x11'
             directory.mkdir(mode=0o700)
             for name in ('libX11.so.6', 'libX11-xcb.so.1'):
-                shutil.copy2(find_x11(extras['x11_home'], name), directory / name)
+                copy_owned_file(find_x11(extras['x11_home'], name), directory / name)
                 pin(directory / name)
             # Include the private X11 ELF closure, not just its public entry points.
             for file in (extras['x11_home'] / 'lib').glob('*'):
@@ -213,7 +249,7 @@ def assemble(args):
                     installed = directory / file.name
                     if installed.exists() and sha(installed) != sha(file):
                         raise ValueError('Conflicting private X11 library: ' + file.name)
-                    shutil.copy2(file, installed)
+                    copy_owned_file(file, installed)
                     pin(installed)
             locale_data = extras['x11_home'] / 'share/X11'
             if locale_data.is_dir():
@@ -235,13 +271,13 @@ def assemble(args):
             installed = directory / 'bin/gamescope-brokey'
             if installed.is_symlink():
                 installed.unlink()
-            shutil.copy2(compositor, installed)
+            copy_owned_file(compositor, installed)
             xwayland = directory / 'bin/Xwayland'
             if not xwayland.is_file():
                 found = shutil.which('Xwayland')
                 if not found:
                     raise ValueError('Install Xwayland first, or supply it in gamescope home bin/.')
-                shutil.copy2(found, xwayland)
+                copy_owned_file(found, xwayland)
             pin(installed)
             pin(xwayland)
             for file in directory.rglob('*'):
@@ -251,7 +287,7 @@ def assemble(args):
                             pin(file)
         for source_key, name in (('dxvk_d3d9', 'd3d9.dll'), ('assert_trace', 'libquantower_assert_trace.so')):
             if extras[source_key]:
-                shutil.copy2(extras[source_key], components / name)
+                copy_owned_file(extras[source_key], components / name)
                 pin(components / name)
         (temporary / 'prefix').mkdir(mode=0o700)
         (temporary / 'logs').mkdir(mode=0o700)
@@ -276,7 +312,7 @@ def assemble(args):
             cache.mkdir(mode=0o700)
             for source, name in ((app, 'Quantower.exe'), (desktop, 'WindowsDesktopRuntime.exe')):
                 if source:
-                    shutil.copy2(source, cache / name)
+                    copy_owned_file(source, cache / name)
                     os.chmod(cache / name, 0o600)
         inventory = {str(p.relative_to(temporary)): sha(p) for p in sorted(temporary.rglob('*')) if p.is_file()}
         profile_manager.atomic_bytes(components / 'install-inventory.json', (json.dumps(inventory, indent=2) + '\n').encode())
