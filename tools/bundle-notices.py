@@ -239,6 +239,7 @@ def collect(root, inventory, notice_root, source_archive, output, source_url=Non
     output = Path(output).absolute()
     if not output.resolve().is_relative_to(root) or output.is_symlink() or output.exists():
         raise ValueError('Notices output must be a new directory inside the staged bundle.')
+    output = output.resolve()
     if source_archive.is_relative_to(root):
         raise ValueError('The source companion must stay outside the binary bundle.')
     offer = root / 'source-offer.json'

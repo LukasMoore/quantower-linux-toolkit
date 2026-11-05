@@ -84,6 +84,15 @@ class BundleNoticesTests(unittest.TestCase):
             self.collect()
         self.assertFalse((self.bundle / 'licenses').exists())
 
+    def test_contained_output_with_parent_segments_has_canonical_bundle_paths(self):
+        output = self.bundle / '..' / self.bundle.name / 'licenses'
+        manifest, _ = notices.collect(self.bundle, self.inventory, self.notice_root,
+                                      self.archive, output)
+        notice = manifest['components'][0]['notices'][0]
+        self.assertEqual(notice['bundle_path'], 'licenses/components/wine/wine/LICENSE')
+        self.assertEqual((self.bundle / notice['bundle_path']).read_bytes(), self.notice)
+        self.assertTrue((self.bundle / 'licenses/manifest.json').is_file())
+
     def test_tampered_notice_or_source_never_produces_publishable_metadata(self):
         (self.notice_root / 'wine/LICENSE').write_bytes(b'changed')
         with self.assertRaisesRegex(ValueError, 'Notice checksum'):
