@@ -8,10 +8,16 @@ Review the source and test it yourself in an isolated demo environment on your o
 hardware before trusting it with accounts, data or live trading. This experimental
 release has not established production readiness.
 
+**Prebuilt download:** [v0.2.0 — Debian 13 x86-64 runtime bundle](https://github.com/LukasMoore/quantower-linux-toolkit/releases/tag/v0.2.0).
+The release includes the runtime archive, SHA256 checksums, matching source
+companion and [verification report](https://github.com/LukasMoore/quantower-linux-toolkit/releases/download/v0.2.0/quantower-linux-runtime-v0.2.0-verification.json).
+Download the named runtime archive; GitHub's automatic “Source code” archives
+contain source only and do not include `setup.sh` or compiled runtimes.
+
 An experimental launcher, diagnostics suite and native compatibility patchset for
 running a user-obtained Quantower installation through Wine on Linux. The Git
-repository contains source; a versioned Debian runtime bundle can also package
-the redistributable dependencies with matching notices and source archives.
+repository contains source; the released Debian runtime bundle includes
+redistributable dependencies with matching notices and source archives.
 The toolkit keeps each installation in a dedicated prefix, records bounded local
 logs, and verifies process ownership before cleanup.
 
@@ -25,7 +31,8 @@ Wine and Valve. It does not change account permissions, licensing or trading rul
 | --- | --- |
 | Launcher, logging and process-ownership tests | Isolated Python tests; no trading account or display required |
 | Native compatibility patches | Local source corrections with component-specific tests; not represented as upstream accepted |
-| Live integration | A development installation has been exercised on Linux x86-64 with NVIDIA and nested gamescope on Wayland |
+| v0.2.0 app integration | A fresh Debian 13 installation reached the full app workspace in compatible/software mode and closed normally |
+| v0.2.0 GPU check | Headless gamescope/Vulkan/Xwayland/child startup passed on an NVIDIA RTX 2070 SUPER; full GPU-profile app behavior still needs individual testing |
 | Other GPUs, distributions and displays | Configuration is supported; actual compatibility needs testing on those systems |
 | Native Windows, macOS and 32-bit Linux | Outside this launcher's supported platform |
 
@@ -36,6 +43,15 @@ The public repository contains no platform performance comparisons or vendor UI
 screenshots.
 
 ## Requirements
+
+The **prebuilt bundle supplies Wine, gamescope, private Xlib, DXVK and open
+DejaVu fonts**. You do not need a system Wine installation or compiler SDK to
+use it. It targets Debian 13 x86-64 with glibc 2.41 or newer, Python 3.11 or
+newer, Bash and a working graphical desktop. Host graphics drivers, CA
+certificates and desktop prerequisites remain required; Debian Xwayland uses
+`/usr/bin/xkbcomp` (`x11-xkb-utils`) and keyboard data (`xkb-data`).
+
+For source/manual installations, supply or build the runtime components below:
 
 - Linux x86-64, Python 3.11 or newer, Bash, `/proc`, Unix file locks and pidfd support.
 - A Wine runtime that supports the 64-bit application **and 32-bit Windows PE
@@ -59,20 +75,27 @@ No command installs system packages or changes a host GPU driver.
 
 ## Set up a new installation
 
-For a prebuilt Debian 13 x86-64 runtime bundle, verify the release archive's
-published SHA256, extract it, then run this inside the extracted directory:
+Download `quantower-linux-runtime-0.2.0-debian13-x86_64.tar.gz` and its matching
+`.sha256` from the [v0.2.0 release](https://github.com/LukasMoore/quantower-linux-toolkit/releases/tag/v0.2.0)
+into the same directory, then verify, extract and install:
 
 ```bash
+sha256sum --check quantower-linux-runtime-0.2.0-debian13-x86_64.tar.gz.sha256
+tar -xzf quantower-linux-runtime-0.2.0-debian13-x86_64.tar.gz
+cd quantower-linux-runtime-0.2.0-debian13-x86_64
 ./setup.sh --plan
-./setup.sh --target "$HOME/.local/share/quantower-linux" --install
+./setup.sh --target "$HOME/.local/share/quantower-linux" --install --profile compatible
 ```
 
-The first command only verifies and reports a plan. The explicit `--install`
+`./setup.sh --plan` only verifies and reports a plan. The explicit `--install`
 operation uses bundled Wine, gamescope, Xlib and DXVK, downloads the pinned
 publisher installers separately, and creates a new isolated installation.
 Debian 13, glibc 2.41 or newer, Python 3.11 or newer and a graphical session are
 required. Host graphics drivers remain a host prerequisite. Other systems need
-their own validation. Read [the bundle setup and packaging guide](docs/RUNTIME-BUNDLE.md)
+their own validation. The quick start selects the compatible rendering profile
+used for the full fresh-app test. Optional `--repair-icons` opts in to the tested
+local icon-font identity repair; use it only with assets you are permitted to
+modify. Read [the bundle setup and packaging guide](docs/RUNTIME-BUNDLE.md)
 for profile selection, offline staging, corresponding sources and testing limits.
 
 For a source checkout, supply or build the runtime components as follows.
@@ -237,7 +260,7 @@ map to the installer as follows:
 | --- | --- |
 | `stage/wine/opt/wine-devel` | `--wine-home` |
 | `stage/gamescope/usr` | `--gamescope-home` |
-| `stage/x11/usr/lib` | `--x11-home` |
+| `stage/x11/usr` (including `lib/` and `share/X11/`) | `--x11-home` |
 | Locally built assertion library | `--assert-trace` |
 
 The optional tracer is built separately with `native/build-assert-trace.py`; it
@@ -286,7 +309,11 @@ to its [published terms](https://www.quantower.com/terms-of-use), including rest
 on publishing platform benchmarking information. Keep vendor assets, platform
 comparison reports, application logs and private settings out of public commits.
 
-The pinned source preparation has been checked with all eight patches applying
-without fuzz. The five changed Wine x86-64 modules also compiled and linked in
-isolation with XInput enabled. This does not establish a full WoW64 build or
-application integration for the public recipe; see `patches/validation.json`.
+The v0.2.0 release completed a full modern WoW64 build and passed 224 isolated
+tests on Python 3.11, 3.12 and 3.13. Validation also covered 32/64-bit native
+runtime probes, taskbar minimize/restore, archive tamper refusal, relocation,
+read-only installation and a fresh compatible-mode app workspace. See the
+[release verification report](https://github.com/LukasMoore/quantower-linux-toolkit/releases/download/v0.2.0/quantower-linux-runtime-v0.2.0-verification.json)
+and [source CI](https://github.com/LukasMoore/quantower-linux-toolkit/actions/runs/42100964478)
+for evidence and limits. `patches/validation.json` preserves earlier per-patch
+checks; it is not the complete validation record for the released bundle.
