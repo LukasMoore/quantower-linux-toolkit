@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import shutil
 import sys
 import tempfile
 import unittest
@@ -78,6 +79,38 @@ class RenderCommandTests(unittest.TestCase):
         (components / 'manifest.json').write_text(json.dumps({'required_files': {}}))
         self.environment = {'QUANTOWER_APP_VERSION': '1.147.5',
                             'XDG_RUNTIME_DIR': '/run/user/123', 'WAYLAND_DISPLAY': 'wayland-7'}
+
+    def executable_fixture(self, directory, name):
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / name
+        path.write_text('#!/bin/sh\nexit 99\n')
+        path.chmod(0o700)
+        return path
+
+    def test_gpu_watchdog_resolves_after_relocation_without_caller_path(self):
+        self.executable_fixture(self.base / 'gamescope/files/bin', 'gamescopereaper')
+        relocated = self.base.with_name(self.base.name + ' relocated')
+        self.base.rename(relocated)
+        self.addCleanup(shutil.rmtree, relocated)
+        launch = runtime_config.build_render_launch(relocated, runtime_config.RuntimeConfig(), self.environment)
+        helpers = relocated / 'gamescope/files/bin'
+        self.assertEqual(shutil.which('gamescopereaper', path=launch.environment['PATH']),
+                         str(helpers / 'gamescopereaper'))
+        self.assertEqual(launch.environment['PATH'], str(helpers) + os.pathsep + os.defpath)
+        self.assertNotIn('PATH', self.environment, 'building a launch must preserve the caller environment')
+
+    def test_gpu_watchdog_uses_private_helper_and_preserves_caller_path(self):
+        helpers = self.base / 'gamescope/files/bin'
+        private = self.executable_fixture(helpers, 'gamescopereaper')
+        caller_bin = self.base / 'caller tools'
+        self.executable_fixture(caller_bin, 'gamescopereaper')
+        caller_helper = self.executable_fixture(caller_bin, 'caller-helper')
+        environment = dict(self.environment, PATH=str(caller_bin))
+        launch = runtime_config.build_render_launch(self.base, runtime_config.RuntimeConfig(), environment)
+        self.assertEqual(shutil.which('gamescopereaper', path=launch.environment['PATH']), str(private))
+        self.assertEqual(shutil.which('caller-helper', path=launch.environment['PATH']), str(caller_helper))
+        self.assertEqual(launch.environment['PATH'], str(helpers) + os.pathsep + str(caller_bin))
+        self.assertEqual(environment['PATH'], str(caller_bin))
 
     def test_default_command_preserves_hardware_autodetection(self):
         environment = dict(self.environment, DXVK_FILTER_DEVICE_NAME='old machine', LD_PRELOAD='old preload', DISPLAY=':old')

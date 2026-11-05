@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import shutil
 import tempfile
 import textwrap
 import unittest
@@ -155,13 +156,14 @@ class InstallationTests(unittest.TestCase):
         return result
 
     def test_readonly_runtime_sources_stage_writable_private_copies_without_source_changes(self):
+        self.target = self.root / 'installed gpu target with spaces'
         library = self.wine / 'lib/fixture.so'
         library.parent.mkdir()
         library.write_bytes(b'\x7fELF synthetic runtime')
         (self.wine / 'lib/absolute.so').symlink_to(library)
         game = self.root / 'gamescope-source'
         (game / 'bin').mkdir(parents=True)
-        for name in ('gamescope', 'gamescope-brokey', 'Xwayland'):
+        for name in ('gamescope', 'gamescope-brokey', 'gamescopereaper', 'Xwayland'):
             path = game / 'bin' / name
             path.write_bytes(('synthetic ' + name).encode())
             path.chmod(0o700)
@@ -193,6 +195,10 @@ class InstallationTests(unittest.TestCase):
         self.assertEqual((copied / 'lib/absolute.so').read_bytes(), library.read_bytes())
         self.assertEqual((self.target / 'gamescope/files/bin/gamescope-brokey').read_bytes(),
                          (game / 'bin/gamescope').read_bytes())
+        launch = installer.runtime_config.build_render_launch(
+            self.target, installer.runtime_config.RuntimeConfig(), {'PATH': '/fixture-missing-system-tools'})
+        self.assertEqual(shutil.which('gamescopereaper', path=launch.environment['PATH']),
+                         str(self.target / 'gamescope/files/bin/gamescopereaper'))
         self.assertEqual((self.target / 'runtime-components/x11/libX11.so.6').read_bytes(),
                          (x11 / 'lib/libX11.so.6').read_bytes())
         self.assertTrue((self.target / 'runtime-components/x11/share/X11/locale/fixture/Compose').is_file())

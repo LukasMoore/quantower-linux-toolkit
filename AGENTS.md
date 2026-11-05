@@ -29,6 +29,10 @@ Read README.md for installation and THIRD_PARTY.md for licensing boundaries.
 - Keep runtime paths inside the installer-managed canonical layout so process
   executable checks remain meaningful. Changing runtime locations requires updating
   ownership selectors and tests together, not just replacing a command string.
+- Keep the GPU compositor's `PATH` headed by managed `gamescope/files/bin`,
+  preserving the caller path or `os.defpath` when absent. Gamescope launches
+  `gamescopereaper` by name through `execvp`; an inherited host path is insufficient.
+  Source: [Valve Gamescope 3.16.25](https://github.com/ValveSoftware/gamescope/blob/3.16.25/src/Utils/Process.cpp).
 - Keep launcher diagnostics stdlib-only. Tests use temporary fake installations and
   mocked process discovery. They must never launch or terminate the real app.
 - Apply native changes to pinned official sources in new build directories. Preserve
@@ -168,6 +172,35 @@ Normal launches clear inherited `DOTNET_STARTUP_HOOKS`. Explicit maintenance may
 `QUANTOWER_DIAGNOSTIC_STARTUP_HOOKS` with absolute Windows DLL paths separated by
 semicolons. Hooks are executable code inside the app and are never normal logging
 defaults. Do not leave experimental observers or migration hooks enabled.
+
+## GDI presentation maintenance
+
+- In pinned DXVK 3.1.1, a partial destination with COPY semantics (including
+  windowed DISCARD with one backbuffer) can deliberately use GDI. Its warning is
+  once per swapchain, not a frame count or FPS measurement. Preserve untouched
+  pixels, retained backbuffer contents and writable public `GetDC`/`ReleaseDC`
+  behavior; do not bypass the fallback or invent a backbuffer-count option.
+  Sources: [presentation selection](https://github.com/doitsujin/dxvk/blob/b1a1c99ab52b687cf950d62c88bc2fa316b41663/src/d3d9/d3d9_swapchain.cpp),
+  [COPY semantics](https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dswapeffect),
+  [surface DC handling](https://github.com/doitsujin/dxvk/blob/b1a1c99ab52b687cf950d62c88bc2fa316b41663/src/d3d9/d3d9_surface.cpp).
+- WPF 10.0.13 recognizes
+  `Switch.System.Windows.Media.MediaContext.DisableDirtyRectangles`. Treat it as
+  an experimental GPU-profile candidate: it increases redraw area and GPU work,
+  and clipping can still require partial presentation. Review the matching
+  [switch implementation](https://github.com/dotnet/wpf/blob/v10.0.13/src/Microsoft.DotNet.Wpf/src/PresentationCore/MS/internal/CoreAppContextSwitches.cs#L331)
+  and [full-target invalidation](https://github.com/dotnet/wpf/blob/v10.0.13/src/Microsoft.DotNet.Wpf/src/WpfGfx/core/hw/hwdisplayrt.cpp#L383).
+  Change runtime configuration only, retain signed vendor DLLs, and never enable
+  this automatically for the compatible/software profile.
+- Require independent pixel-preservation checks, resize and minimize/restore
+  checks, and steady CPU-call comparisons on the exact runtime and target
+  hardware before retaining a candidate. Compare frame pacing under a matched
+  changing visual workload before claiming smoother display or higher FPS.
+  Exclude startup compilation from steady statistics and keep a verified rollback
+  under the ownership guards.
+- Temporary diagnostic builds must use explicit opt-in, bounded metadata and
+  aggregate counters; avoid per-frame logging. Local diagnostic toggles are not
+  features of released upstream DXVK unless independently verified. Host Present
+  call timings describe call cost, not visible FPS or display latency.
 
 ## Testing and public release
 
