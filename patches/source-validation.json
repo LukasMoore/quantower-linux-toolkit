@@ -140,5 +140,6 @@
     "component": "x11",
     "download_sha256": "bbc78c46217174655c2b32b138ad119f3ac15f50808b4d0b3a2677a4b1afc950",
     "safe_extract_and_patch": "PASS"
-  }
+  },
+  "record_scope": "Historical source-preparation evidence for the earlier five-patch Wine series. Current Wine source preparation for the added move/resize correction is recorded in validation.json under window_resize_tracking; historical archive and test counts remain unchanged."
 }

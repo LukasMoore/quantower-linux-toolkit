@@ -1,0 +1,39 @@
+--- a/dlls/win32u/defwnd.c
++++ b/dlls/win32u/defwnd.c
+@@ -677,7 +677,7 @@
+ {
+     DWORD msg_pos = NtUserGetMessagePos();
+     BOOL thickframe, drag_full_windows = TRUE, moved = FALSE;
+-    RECT sizing_rect, mouse_rect, orig_rect;
++    RECT sizing_rect, tracking_rect, mouse_rect, orig_rect;
+     UINT hittest = wparam & 0x0f;
+     UINT syscommand = wparam & 0xfff0;
+     UINT style = get_window_long( hwnd, GWL_STYLE );
+@@ -777,6 +777,9 @@
+     /* repaint the window before moving it around */
+     NtUserRedrawWindow( hwnd, NULL, 0, RDW_UPDATENOW | RDW_ALLCHILDREN );
+ 
++    /* Keep pointer tracking separate from application-adjusted snap rectangles. */
++    tracking_rect = sizing_rect;
++
+     send_message( hwnd, WM_ENTERSIZEMOVE, 0, 0 );
+     set_capture_window( hwnd, GUI_INMOVESIZE, NULL );
+ 
+@@ -857,11 +860,12 @@
+             else
+             {
+                 if (!drag_full_windows) draw_moving_frame( parent, hdc, &sizing_rect, thickframe );
+-                if (hittest == HTCAPTION || hittest == HTBORDER) OffsetRect( &sizing_rect, dx, dy );
+-                if (on_left_border( hittest )) sizing_rect.left += dx;
+-                else if (on_right_border( hittest )) sizing_rect.right += dx;
+-                if (on_top_border( hittest )) sizing_rect.top += dy;
+-                else if (on_bottom_border( hittest )) sizing_rect.bottom += dy;
++                if (hittest == HTCAPTION || hittest == HTBORDER) OffsetRect( &tracking_rect, dx, dy );
++                if (on_left_border( hittest )) tracking_rect.left += dx;
++                else if (on_right_border( hittest )) tracking_rect.right += dx;
++                if (on_top_border( hittest )) tracking_rect.top += dy;
++                else if (on_bottom_border( hittest )) tracking_rect.bottom += dy;
++                sizing_rect = tracking_rect;
+                 capture_point = pt;
+ 
+                 /* determine the hit location */

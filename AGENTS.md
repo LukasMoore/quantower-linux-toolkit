@@ -202,6 +202,43 @@ defaults. Do not leave experimental observers or migration hooks enabled.
   features of released upstream DXVK unless independently verified. Host Present
   call timings describe call cost, not visible FPS or display latency.
 
+## Window move and resize maintenance
+
+- Wine 11.20 allows application callbacks to change the rectangle passed through
+  `WM_MOVING` and `WM_SIZING`. Applying each new pointer delta to that adjusted
+  rectangle can trap slow movement inside a snapping threshold. Patch
+  `0006-win32u-unsnapped-pointer-tracking.patch` retains a separate unsnapped
+  tracking rectangle while preserving the callback-adjusted rectangle for display.
+  Retain snapping, pointer clamps, minimum/maximum sizes, Escape cancellation,
+  child/screen coordinate conversions and full/outline dragging.
+  Sources: [pinned Wine loop](https://github.com/wine-mirror/wine/blob/wine-11.20/dlls/win32u/defwnd.c),
+  [WM_SIZING](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-sizing),
+  [WM_MOVING](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-moving).
+- Gate native regression results on valid input/capture delivery and exact expected
+  geometry, not just a harness exit code. Cover all eight resize directions, slow
+  and fast motion, reversal through a magnet, endpoints inside its range, ordinary
+  unsnapped movement, size limits and cancellation. Keep child, outline and bounded
+  keyboard checks. Preserve invalid development attempts as excluded evidence;
+  never count them as passing cases. Fixtures are under
+  [tests/native/window-snapping](tests/native/window-snapping/README.md).
+- [Quantower standalone panels](https://help.quantower.com/quantower/general-settings/standalone-panels)
+  can snap during movement and resize. A
+  [Bind](https://help.quantower.com/quantower/general-settings/binds) uses one outer
+  frame with internal dividers, and
+  [Workspace Lock](https://help.quantower.com/quantower/general-settings/workspaces-binds-groups)
+  disables panel movement/resizing. Check which state is involved before attributing
+  a corner problem to Wine. Do not patch signed vendor DLLs or invent a registry
+  setting to disable the application's magnets.
+- Runtime maintenance requires a normally stopped application, verified inactive
+  prefix and the shared launch lock. Preserve the matching original runtime and
+  manifest, validate replacement hashes, and roll back the coherent pair only while
+  inactive. Never replace a loaded module or weaken process-ownership guards.
+- A nested display can fail to retain a programmatic cursor warp even when the API
+  returns success. Keep pointer-delivery guards and report inconclusive live gestures
+  honestly. Independent synthetic geometry checks do not establish that a particular
+  app's physical corner drag, frame rate or trading workflow has been verified.
+  See [docs/WINDOW-SNAPPING.md](docs/WINDOW-SNAPPING.md).
+
 ## Testing and public release
 
 Runtime bundles target Debian 13 x86-64 and keep host libc and graphics drivers

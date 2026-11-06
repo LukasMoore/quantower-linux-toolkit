@@ -40,5 +40,95 @@
     "This is not a complete modern WoW64/i386 build.",
     "A complete Wine/gamescope runtime and application integration from the public recipe have not been validated.",
     "No application benchmark or production suitability claim is made."
-  ]
+  ],
+  "record_scope": "The original source_lock_sha256, source_preparation, compile_validation and limits fields are historical pre-v0.2.0 records. Newer patch-specific evidence appears in window_resize_tracking; do not apply historical build limits or counts to a different source lock.",
+  "window_resize_tracking": {
+    "source_lock_sha256": "120cc45493f240de37f4dd454a773abd59ab39050699d52373c4313b1227e1fb",
+    "patch": "patches/wine/0006-win32u-unsnapped-pointer-tracking.patch",
+    "patch_sha256": "c3461d5cbb7310f6675e883cc46e5c17cae8be2beb8425dad8bde764775ea092",
+    "upstream_accepted": false,
+    "source_preparation": {
+      "component": "wine",
+      "version": "11.20",
+      "archive_sha256": "5ec21349f153cf43f2fe1476be2e29306f3cf0428770a1a4ca0c85ff239e0bdc",
+      "verified_archives": 1,
+      "exact_patches_applied": 6,
+      "context_fuzz": 0,
+      "new_patch_line_offsets": 0,
+      "line_offset_note": "The preexisting GDI+ patch applies with line offsets and exact context; no context fuzz is used. The new move/resize patch needs no offsets.",
+      "prepared_defwnd_sha256": "a97c49502e6d21e4d7c797ea3277866829ffbfa97d1db2cbcf04e09b2051fe9c",
+      "matches_tested_source": true,
+      "offline": true,
+      "result": "PASS"
+    },
+    "compile_validation": {
+      "component": "Wine Unix win32u.so",
+      "architecture": "x86_64",
+      "command": [
+        "make",
+        "-j2",
+        "dlls/win32u/win32u.so"
+      ],
+      "source": "Pinned Wine 11.20 with this six-patch Wine series",
+      "compiled_module_sha256": "92395e0480c4837c8a253d897542523276a85628171d0aca2dcb9ab9edf8039e",
+      "result": "PASS",
+      "full_runtime_rebuilt_for_this_change": false
+    },
+    "synthetic_regressions": {
+      "scope": "Original own-window fixtures in disposable, networkless prefixes. No vendor application, accounts, saved settings or market data used.",
+      "dpi": 96,
+      "accepted_candidate_checks": 169,
+      "main": {
+        "compatible_wine_builds": 2,
+        "candidate_checks_per_build": 61,
+        "all_input_capture_entry_exit_guards_passed": true,
+        "all_candidate_exact_bounds_passed": true,
+        "baseline_expected_sticky_failures_per_build": 18,
+        "baseline_control_passes_per_build": 43,
+        "control_bounds_identical_between_variants": true,
+        "coverage": [
+          "Eight resize edges and corners",
+          "Caption movement",
+          "Slow one-pixel and fast 250-pixel pointer motion",
+          "Reversing across a magnet",
+          "Escape cancellation",
+          "No snapping",
+          "Exact preexisting minimum and maximum size bounds"
+        ]
+      },
+      "snapping_retention": {
+        "candidate_checks": 9,
+        "all_passed": true,
+        "coverage": "All eight resize directions and caption movement; the endpoint remains snapped when the pointer stops inside the magnet range."
+      },
+      "supplemental": {
+        "accepted_candidate_checks": 38,
+        "accepted_baseline_checks": 38,
+        "all_accepted_injections_valid": true,
+        "all_candidate_exact_bounds_passed": true,
+        "baseline_expected_sticky_failures": 14,
+        "coverage": [
+          "Child screen-to-parent coordinates",
+          "Child full-window and outline dragging",
+          "Outline geometry unchanged until commit",
+          "Resize, move, reverse and Escape",
+          "Bounded keyboard commit and cancellation"
+        ],
+        "excluded_historical_invalid_trials_per_variant": 3,
+        "historical_limit": "Child/full-window multikey keyboard trials encountered an existing input-loop exit in both variants. Invalid injections were excluded and replaced by bounded commit/cancel controls; no multikey child/full-window reliability claim is made."
+      },
+      "result": "PASS"
+    },
+    "limits": [
+      "These are input and geometry correctness checks, not application performance benchmarks.",
+      "No high-DPI, cross-GPU, production-trading or actual application corner-gesture guarantee is established.",
+      "The prebuilt v0.2.0 runtime archive was not rebuilt or replaced for this source change."
+    ],
+    "official_sources": [
+      "https://github.com/wine-mirror/wine/blob/wine-11.20/dlls/win32u/defwnd.c",
+      "https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-sizing",
+      "https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-moving",
+      "https://github.com/wine-mirror/wine/blob/wine-11.20/dlls/user32/tests/win.c"
+    ]
+  }
 }

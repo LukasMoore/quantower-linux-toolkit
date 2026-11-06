@@ -14,6 +14,13 @@ companion and [verification report](https://github.com/LukasMoore/quantower-linu
 Download the named runtime archive; GitHub's automatic “Source code” archives
 contain source only and do not include `setup.sh` or compiled runtimes.
 
+**Source update after v0.2.0:** the current Wine build recipe includes a correction
+for windows that become difficult to resize after snapping. It keeps pointer
+tracking separate from application-adjusted snap rectangles. The published v0.2.0
+runtime and source-companion assets remain the original release; using its download
+does not install this later correction. See the [snapping fix and validation guide](docs/WINDOW-SNAPPING.md)
+for source builds, regression fixtures and validation limits.
+
 An experimental launcher, diagnostics suite and native compatibility patchset for
 running a user-obtained Quantower installation through Wine on Linux. The Git
 repository contains source; the released Debian runtime bundle includes

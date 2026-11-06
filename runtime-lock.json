@@ -31,6 +31,10 @@
         {
           "path": "patches/wine/0005-explorer-appwindow-taskbar.patch",
           "sha256": "7e0627a46b982a89955a4800738c853ffd3b2799334a537261c4754eb7459a37"
+        },
+        {
+          "path": "patches/wine/0006-win32u-unsnapped-pointer-tracking.patch",
+          "sha256": "c3461d5cbb7310f6675e883cc46e5c17cae8be2beb8425dad8bde764775ea092"
         }
       ],
       "license": "LGPL-2.1-or-later",

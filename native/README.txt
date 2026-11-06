@@ -21,7 +21,8 @@ Wine 11.20 uses modern WoW64: a 64-bit Unix host with both i386 and x86_64 PE
 modules (--enable-archs=i386,x86_64), supporting common 32-bit installer bootstraps
 as well as the 64-bit app. It includes the .NET AMD64 suspension fallback,
 expected XInput button-map error recovery, GDI+ call-local text resources,
-thread-owned implicit Uniscribe caches, and virtual-desktop taskbar fixes.
+thread-owned implicit Uniscribe caches, virtual-desktop taskbar fixes, and separate
+unsnapped pointer tracking for application-adjusted move/resize rectangles.
 Native Wayland is disabled; the integration uses Wine's X11 driver. This is a
 new upstream-based source build, excluding older local bitmap/profiling changes.
 It is not asserted to reproduce a prior runtime binary or its app behavior.
@@ -148,6 +149,32 @@ This needs a reachable test DISPLAY. Success reports passed=true and zero family
 and style statuses for all eight fixed names. The compiled probe remains private;
 the same MinGW/GCC startup-runtime notice terms apply if it is redistributed.
 
+Window snapping regression
+
+The source build recipe includes Wine patch 0006 for incremental move/resize
+tracking. WM_MOVING and WM_SIZING callbacks may change the proposed rectangle.
+When a callback snaps an edge and each subsequent mouse delta starts from that
+snapped rectangle, a slow drag can repeatedly lose its accumulated distance.
+The correction updates a separate tracking rectangle and continues applying the
+callback's rectangle to the window. Snapping remains enabled.
+
+See ../docs/WINDOW-SNAPPING.md and
+../tests/native/window-snapping/README.md for the original source-only fixtures,
+compile commands and isolated fresh-prefix container runs. Initial validation
+accepted 169 candidate geometry cases: 61 for each of two Wine runtime variants,
+nine snap-retention endpoints and 38 child/outline/keyboard cases at 96 DPI,
+using 64-bit Windows probes.
+Invalid historical injection attempts are excluded. This is synthetic native
+correctness evidence, with no application workload or performance measurement.
+Actual physical corner dragging in the application still needs individual testing;
+a nested compositor prevented reliable automated cursor placement during that check.
+
+This correction is included in the current source recipe. The v0.2.0 prebuilt
+runtime and source-companion assets remain the original release. Build a fresh
+runtime and test installation to evaluate the later patch; do not assume that
+extracting the older bundle installs it or that a module from another Wine build
+can be copied safely into an existing loaded runtime.
+
 Validation boundaries
 
 The source preparation checks and offline unit tests establish archive integrity,
@@ -166,3 +193,8 @@ https://github.com/wine-mirror/wine/blob/wine-11.20/dlls/dwrite/font.c
 https://xorg.freedesktop.org/archive/individual/lib/libX11-1.8.14.tar.xz
 https://github.com/ValveSoftware/gamescope/tree/3.16.25
 https://github.com/ValveSoftware/gamescope/commit/175a67258952ae1c54a85183927b09328d20be2e
+
+Window tracking references:
+https://github.com/wine-mirror/wine/blob/wine-11.20/dlls/win32u/defwnd.c
+https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-sizing
+https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-moving

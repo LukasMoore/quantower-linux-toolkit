@@ -3,8 +3,11 @@ Pinned upstream patch series
 The sequence in runtime-lock.json applies to original upstream archives; no
 unpublished local Git repository or developer-specific toolchain tree is needed.
 All patch files are SHA256-pinned and applied forward with zero context fuzz.
-source-validation.json records the source-preparation checks, not a claim about
-every application's behavior on the newly compiled runtime.
+source-validation.json and the original top-level fields in validation.json retain
+historical source-preparation and module checks for the earlier eight-patch series.
+The later window_resize_tracking section in validation.json records the added
+Wine patch separately. These records are scoped evidence, not a claim about every
+application's behavior on a newly compiled runtime.
 
 wine/0001-dotnet-amd64-suspension-fallback.patch
   Removes QueueUserAPC2 from AMD64 named lookup while preserving its ordinal and
@@ -32,6 +35,17 @@ wine/0005-explorer-appwindow-taskbar.patch
   Gives visible owned WS_EX_APPWINDOW panels taskbar buttons. The enabled virtual
   desktop shell taskbar is TOPMOST so ordinary full-height panels cannot cover it.
   The taskbar remains an overlay; shared monitor workarea reservation is not added.
+
+wine/0006-win32u-unsnapped-pointer-tracking.patch
+  Keeps pointer tracking independent of the rectangle applications adjust through
+  WM_MOVING/WM_SIZING. Slow drags can escape a snapping threshold while callbacks
+  still control applied window bounds. Pointer clamps, size limits, child/screen
+  conversion, outline dragging and Escape cancellation are preserved. Original
+  synthetic fixtures cover geometry correctness at 96 DPI; physical corner dragging
+  in a real application remains an individual integration check. Local correction,
+  not upstream accepted. See ../docs/WINDOW-SNAPPING.md and
+  ../tests/native/window-snapping/README.md. Current source builds include it;
+  the published v0.2.0 runtime/source-companion assets remain the original release.
 
 x11/0001-xid-after-sequence-sync.patch
   Replenishes the cached XID after sequence synchronization, which can release
