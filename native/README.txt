@@ -175,6 +175,37 @@ runtime and test installation to evaluate the later patch; do not assume that
 extracting the older bundle installs it or that a module from another Wine build
 can be copied safely into an existing loaded runtime.
 
+Signed tracking-tooltip regression
+
+Wine patch 0007 adds signed 16-bit extraction for TTM_TRACKPOSITION x/y values.
+Negative screen coordinates are legitimate on monitors left of or above the
+primary. This retains all earlier patches and the existing tooltip layout,
+clipping, rendering and monitor algorithms. It is a local Wine correction under
+Wine's existing LGPL terms, not an upstream-accepted release.
+
+Original v5/v6 tooltip sources, compile-only instructions and explicit networkless
+96/192-DPI synthetic controls are in
+../tests/native/integrated-windows/tooltip-coordinates/README.md. Actual host popup
+and application validation remain separate. Current source builds include 0007;
+published v0.2.0 runtime/source-companion archives remain unchanged.
+
+Minimized GDI overview previews
+
+Wine patch 0009 provides exact opt-in QTK_PRESERVE_MINIMIZED_PREVIEW=1 to preserve
+last normal GDI pixels and bounding shape while a direct-host managed window is
+minimized. It preserves deferred shape replay on restore and avoids adding window
+or user locks beneath the surface lock. It does not change owner relations,
+taskbar policy, close handling or signed application files. Other flag values keep
+the original behavior. This is a local Wine LGPL correction, not upstream accepted.
+
+The original callback/GDI fixture guide is in
+../tests/native/integrated-windows/minimized-preview/README.md. Callback tests use
+pinned prepared source and inert mocks; disposable Xvfb tests compare exact pixels
+and shapes before/after minimize, restore and resize. No host/application or GPU
+stability acceptance is implied. There is no 0008 dependency. Published prebuilt
+runtime/source-companion archives remain unchanged; only new source builds include
+0009. Preserve complete manifest checks and normally stopped deployment guards.
+
 Validation boundaries
 
 The source preparation checks and offline unit tests establish archive integrity,

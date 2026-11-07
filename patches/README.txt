@@ -5,8 +5,8 @@ unpublished local Git repository or developer-specific toolchain tree is needed.
 All patch files are SHA256-pinned and applied forward with zero context fuzz.
 source-validation.json and the original top-level fields in validation.json retain
 historical source-preparation and module checks for the earlier eight-patch series.
-The later window_resize_tracking section in validation.json records the added
-Wine patch separately. These records are scoped evidence, not a claim about every
+The later window_resize_tracking and tooltip_tracking_coordinates sections in
+validation.json record added Wine patches separately. These records are scoped evidence, not a claim about every
 application's behavior on a newly compiled runtime.
 
 wine/0001-dotnet-amd64-suspension-fallback.patch
@@ -46,6 +46,27 @@ wine/0006-win32u-unsnapped-pointer-tracking.patch
   not upstream accepted. See ../docs/WINDOW-SNAPPING.md and
   ../tests/native/window-snapping/README.md. Current source builds include it;
   the published v0.2.0 runtime/source-companion assets remain the original release.
+
+wine/0007-comctl32-signed-tracking-tooltip-coordinates.patch
+  Sign-extends each packed 16-bit screen coordinate for TTM_TRACKPOSITION before
+  using it as an INT. A negative X/Y can occur to the left of or above the primary
+  monitor. Treating LOWORD/HIWORD as unsigned instead relocates a tooltip toward
+  the opposite screen edge. Only these two coordinate extractions change; sizing,
+  monitor selection, clipping, painting and the earlier patch series are retained.
+  This is a local LGPL-2.1-or-later Wine modification, not upstream accepted.
+  Original v5/v6 own-tooltip fixtures and explicit disposable-prefix instructions:
+  ../tests/native/integrated-windows/tooltip-coordinates/README.md. Source builds
+  include the added patch; published v0.2.0 assets have not been rebuilt for it.
+
+wine/0009-winex11-preserve-minimized-preview.patch
+  Opt-in QTK_PRESERVE_MINIMIZED_PREVIEW=1 retains the last normal GDI pixels and
+  bounding shape for direct-host managed minimized windows. Eligibility is cached
+  atomically outside the surface flush lock; deferred dirty pixels and shape are
+  replayed after restoration. Default behavior, ownership, close handling, taskbar
+  policy and GPU client-surface paths remain unchanged. This source series has no
+  0008 dependency. Local LGPL-2.1-or-later Wine correction, not upstream accepted.
+  Original callback/GDI fixtures: ../tests/native/integrated-windows/minimized-preview/README.md.
+  Only new source builds contain the patch; published prebuilt assets are unchanged.
 
 x11/0001-xid-after-sequence-sync.patch
   Replenishes the cached XID after sequence synchronization, which can release

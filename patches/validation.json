@@ -41,7 +41,7 @@
     "A complete Wine/gamescope runtime and application integration from the public recipe have not been validated.",
     "No application benchmark or production suitability claim is made."
   ],
-  "record_scope": "The original source_lock_sha256, source_preparation, compile_validation and limits fields are historical pre-v0.2.0 records. Newer patch-specific evidence appears in window_resize_tracking; do not apply historical build limits or counts to a different source lock.",
+  "record_scope": "The original source_lock_sha256, source_preparation, compile_validation and limits fields are historical pre-v0.2.0 records. Newer patch-specific evidence appears in window_resize_tracking and tooltip_tracking_coordinates; do not apply historical build limits or counts to a different source lock.",
   "window_resize_tracking": {
     "source_lock_sha256": "120cc45493f240de37f4dd454a773abd59ab39050699d52373c4313b1227e1fb",
     "patch": "patches/wine/0006-win32u-unsnapped-pointer-tracking.patch",
@@ -129,6 +129,154 @@
       "https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-sizing",
       "https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-moving",
       "https://github.com/wine-mirror/wine/blob/wine-11.20/dlls/user32/tests/win.c"
+    ]
+  },
+  "tooltip_tracking_coordinates": {
+    "source_lock_sha256": "285932d65446e7c16d6ab805aed439848c530a695963d7a235d0b42e4bec4357",
+    "patch": "patches/wine/0007-comctl32-signed-tracking-tooltip-coordinates.patch",
+    "patch_sha256": "9333d46d899770dbd12f21d1f4e20387a8618eed6a883bfc39214f4077ace516",
+    "upstream_accepted": false,
+    "scope": "Local Wine TTM_TRACKPOSITION signed16 x/y extraction only; existing patches and tooltip sizing, clipping, monitor and rendering paths retained.",
+    "source_preparation": {
+      "component": "wine",
+      "version": "11.20",
+      "archive_sha256": "5ec21349f153cf43f2fe1476be2e29306f3cf0428770a1a4ca0c85ff239e0bdc",
+      "exact_patches_applied": 7,
+      "context_fuzz": 0,
+      "new_patch_line_offsets": 0,
+      "offline": true,
+      "result": "PASS",
+      "prepared_tooltips_sha256": "9d0386fb812cbb6a8f303716af1ef3c37456f49d8ee7bf0082c837affc3f7d55",
+      "retained_defwnd_sha256": "a97c49502e6d21e4d7c797ea3277866829ffbfa97d1db2cbcf04e09b2051fe9c",
+      "matches_tested_tooltip_source": true
+    },
+    "compile_validation": {
+      "source": "Pinned Wine11.20 with existing0001-0006 plus0007",
+      "architecture": "x86_64",
+      "modules": [
+        "comctl32.dll",
+        "comctl32_v6.dll"
+      ],
+      "result": "PASS",
+      "full_runtime_rebuilt_for_this_change": false,
+      "named_exports_match": true,
+      "ordinal_exports_match": true,
+      "imports_match": true
+    },
+    "synthetic_regressions": {
+      "scope": "Original MIT own-tooltip source in fresh networkless prefixes on own Xvfb without a window manager; no vendor resources or physical host actions.",
+      "families": [
+        "v5",
+        "v6"
+      ],
+      "wine_dpi": [
+        96,
+        192
+      ],
+      "ordered_points_per_trial": 9,
+      "variants": [
+        "original",
+        "independently rebuilt control",
+        "candidate"
+      ],
+      "checked_cases": 108,
+      "candidate_cases": 36,
+      "original_expected_negative_failures": 24,
+      "control_expected_negative_failures": 24,
+      "nonnegative_control_passes_per_variant": 12,
+      "exact_module_hash_and_process_identity_verified": true,
+      "fixture_source_sha256": "5bb1680be15f365a0535d2254489c74f17623946d485cd3e7a15508712e2c20a",
+      "coordinate_evidence_result": "PASS",
+      "coordinate_candidate_failures": 0,
+      "visibility_result": "FAIL for sole-Xvfb outside-all-workarea requests; not a valid-negative-monitor host acceptance test",
+      "candidate_collapsed_rectangles": 8,
+      "visibility_limit": "The original fixture checks exact signed decoding and IsWindowVisible, not positive rectangle extents. Its far-left request lies outside all active Xvfb workareas and can expose retained zero-width clipping. The stronger portable verifier retains these failures and requires actual EnumDisplayMonitors workareas; no full-popup pass is claimed.",
+      "host_negative_monitor_acceptance": "unverified; separate valid-negative-monitor interior and actual visible-popup checks required"
+    },
+    "limits": [
+      "Synthetic coordinate correctness only; no host focus, physical-monitor placement, composed pixels, vendor popup, GPU stability or trading suitability guarantee.",
+      "Compiled module evidence covers x86_64 v5/v6, not a newly built complete modern WoW64 runtime.",
+      "Published v0.2.0 runtime/source-companion archives were not rebuilt or replaced."
+    ],
+    "official_sources": [
+      "https://learn.microsoft.com/en-us/windows/win32/controls/ttm-trackposition",
+      "https://learn.microsoft.com/en-us/windows/win32/api/windowsx/nf-windowsx-get_x_lparam",
+      "https://learn.microsoft.com/en-us/windows/win32/api/windowsx/nf-windowsx-get_y_lparam",
+      "https://github.com/wine-mirror/wine/blob/wine-11.20/dlls/comctl32/tooltips.c"
+    ]
+  },
+  "minimized_gdi_preview": {
+    "source_lock_sha256": "e9211d0b2834e15ac2076bb5675e296f7fec46dc335fe640fd2633960b894bba",
+    "patch": "patches/wine/0009-winex11-preserve-minimized-preview.patch",
+    "patch_sha256": "c0a85a17b9a06e4694b336661017961cf34819685fde1b3ac3abe0642ba108a8",
+    "upstream_accepted": false,
+    "opt_in": "QTK_PRESERVE_MINIMIZED_PREVIEW=1",
+    "default": "Original behavior for unset or any other value.",
+    "scope": "Buffered GDI pixel and bounding-shape submission for direct-host managed minimized windows; no window owner, taskbar, close, GPU client-surface or vendor binary changes.",
+    "source_preparation": {
+      "component": "wine",
+      "version": "11.20",
+      "baseline_previous_patches": [
+        "0001",
+        "0002",
+        "0003",
+        "0004",
+        "0005",
+        "0006",
+        "0007"
+      ],
+      "no_0008_dependency": true,
+      "new_patch_context_fuzz": 0,
+      "baseline_bitblt_sha256": "13a1fcfd2271d7f3b4da5005a04c6457354cfbe7376c1de5458a880ac76d354c",
+      "prepared_bitblt_sha256": "8a1f9497e6907eab62cecbfd1765dac20e98605ebb54d9570fb7096bc3e6ed01",
+      "result": "PASS",
+      "full_wine_series_patches_applied": 8,
+      "full_wine_series_offline": true
+    },
+    "compile_validation": {
+      "module": "winex11.so",
+      "architecture": "x86_64-unix",
+      "result": "PASS",
+      "export_import_dependency_sets_match_reference": true,
+      "undefined_symbols": 378,
+      "needed_libraries": 6,
+      "full_runtime_rebuilt_for_this_change": false
+    },
+    "actual_callback_regressions": {
+      "callbacks": [
+        "X11DRV_CreateWindowSurface",
+        "x11drv_surface_flush"
+      ],
+      "baseline_cases": 4096,
+      "candidate_cases": 4096,
+      "default_and_exact_optin_guards": true,
+      "deferred_shape_replay_and_repeated_skip": true,
+      "shared_memory_and_fallback_submission": true,
+      "direct_alpha_and_copy_paths": true,
+      "window_queries_from_flush_rejected": true,
+      "result": "PASS",
+      "scope": "Actual extracted pinned callback bodies with inert mocks and simplified types; no X11, Wine or application execution."
+    },
+    "original_gdi_regressions": {
+      "fixture_source_sha256": "db4a2cc127e22d0206164bff031b5d8a70ea5bbd08a44981be0abc426d4381b9",
+      "scope": "Original own-window fixture on disposable networkless Xvfb; no application or host display.",
+      "recorded_runs": 6,
+      "raw_phases_per_run": 6,
+      "cycles_per_run": 2,
+      "mapped_driver_identity_authenticated_runs": 2,
+      "controls": "Baseline and candidate unset/0 alter minimized pixels/shape; restoration matches exactly.",
+      "enabled": "Candidate exact1 preserves exact pixels and bounding shape across both minimize/restore cycles, including resize.",
+      "result": "PASS"
+    },
+    "limits": [
+      "Synthetic callback and original GDI results do not establish GNOME taskbar, popup lifecycle, physical input, monitor layout, actual application or GPU stability acceptance.",
+      "Preserved minimized preview is a static last normal frame. Deferred dirty-work resource cost requires separate screening.",
+      "Existing published prebuilt runtime and source-companion assets were not rebuilt or replaced."
+    ],
+    "official_sources": [
+      "https://github.com/wine-mirror/wine/blob/wine-11.20/dlls/winex11.drv/bitblt.c",
+      "https://github.com/wine-mirror/wine/blob/wine-11.20/dlls/win32u/dce.c",
+      "https://github.com/wine-mirror/wine/blob/wine-11.20/dlls/winex11.drv/window.c"
     ]
   }
 }

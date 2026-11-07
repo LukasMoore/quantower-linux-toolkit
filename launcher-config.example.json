@@ -11,5 +11,8 @@
   "wayland_display": null,
   "host_runtime_dir": null,
   "pulse_server": null,
-  "pipewire_runtime_dir": null
+  "pipewire_runtime_dir": null,
+  "window_mode": "nested",
+  "host_display": null,
+  "wine_dpi": null
 }

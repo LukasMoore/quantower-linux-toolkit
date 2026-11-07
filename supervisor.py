@@ -85,6 +85,31 @@ def owned_identity(pid, prefix, token):
         return None
 
 
+def live_identity(pid):
+    """Read UID/birth/liveness independently of a process's mutable environment.
+
+    A missing/dead PID can retire an old ledger entry; inaccessible live metadata
+    cannot. This deliberately does not authenticate a replacement session member.
+    """
+    proc = Path('/proc') / str(pid)
+    try:
+        before_uid = proc.stat().st_uid
+        raw = (proc / 'stat').read_text()
+        fields = raw[raw.rfind(')') + 2:].split()
+        if fields[0] in ('Z', 'X'):
+            return None
+        birth = int(fields[19])
+        raw = (proc / 'stat').read_text()
+        fields = raw[raw.rfind(')') + 2:].split()
+        if fields[0] in ('Z', 'X'):
+            return None
+        if int(fields[19]) != birth or proc.stat().st_uid != before_uid:
+            raise RuntimeError('Recorded process identity changed during observation.')
+        return ProcessIdentity(int(pid), birth, before_uid)
+    except (FileNotFoundError, ProcessLookupError):
+        return None
+
+
 class SessionProcesses:
     """Track inherited session identities even after descendants are reparented."""
 
@@ -94,6 +119,7 @@ class SessionProcesses:
         self.identities = set()
         self.sent_signals = set()
         self.wine_helpers = set()
+        self.window_mode = 'nested'
 
     def load(self):
         if not self.ledger.exists():
@@ -106,18 +132,25 @@ class SessionProcesses:
                 record.get('prefix') != str(self.prefix) or
                 not re.fullmatch(r'[0-9a-f]{32}', record.get('token', ''))):
             raise RuntimeError('The session ownership record differs.')
+        window_mode = record.get('window_mode', 'nested')
+        if window_mode not in ('nested', 'integrated'):
+            raise RuntimeError('The session ownership window mode is invalid.')
+        self.window_mode = window_mode
         self.token = record['token']
         self.identities = {ProcessIdentity(int(p['pid']), int(p['start_ticks']), int(p['uid']))
                            for p in record['processes']}
 
     def save(self):
         record = dict(version=1, uid=os.getuid(), prefix=str(self.prefix),
-                      token=self.token,
+                      token=self.token, window_mode=self.window_mode,
                       processes=[dict(pid=p.pid, start_ticks=p.start_ticks, uid=p.uid)
                                  for p in sorted(self.identities, key=lambda p: p.pid)])
         profile_manager.atomic_bytes(self.ledger, (json.dumps(record) + '\n').encode())
 
-    def begin(self):
+    def begin(self, window_mode='nested'):
+        if window_mode not in ('nested', 'integrated'):
+            raise ValueError('Invalid new session window mode.')
+        self.window_mode = window_mode
         self.token, self.identities = secrets.token_hex(16), set()
         self.sent_signals.clear()
         self.wine_helpers.clear()
@@ -142,8 +175,26 @@ class SessionProcesses:
             return set()
         found = set()
         known = {p.pid for p in self.identities}
+        retired = set()
+        if self.window_mode == 'integrated':
+            # Never drop a still-live recorded process simply because exec or
+            # environment access lost its prefix/token. Retain the old ledger on
+            # uncertainty. Reused PIDs retire the OLD birth without adoption.
+            for previous in self.identities:
+                try:
+                    current = live_identity(previous.pid)
+                    if current is None or current.start_ticks != previous.start_ticks:
+                        retired.add(previous.pid)
+                        continue
+                    if current.uid != previous.uid:
+                        raise RuntimeError('Cannot verify a recorded session process: UID changed.')
+                    if owned_identity(previous.pid, self.prefix, self.token) != previous:
+                        raise RuntimeError('Cannot verify a recorded session process: identity credentials lost.')
+                except (PermissionError, OSError) as error:
+                    raise RuntimeError('Cannot verify a recorded session process.') from error
         for proc in Path('/proc').iterdir():
-            if not proc.name.isdigit() or int(proc.name) == os.getpid():
+            if (not proc.name.isdigit() or int(proc.name) == os.getpid() or
+                    int(proc.name) in retired):
                 continue
             try:
                 identity = owned_identity(int(proc.name), self.prefix, self.token)
@@ -161,6 +212,39 @@ class SessionProcesses:
         # Any active or unverifiable Starter blocks all cleanup, including its ancestors.
         return prefix_processes(self.prefix) == set()
 
+    def verify_cleanup_roles(self, identities):
+        """Integrated sessions own only exact dedicated Wine executables.
+
+        Role observations supplement UID/prefix/token/birth and pidfds. A role
+        check is not atomic with exec; unstable/unreadable roles defer cleanup.
+        """
+        if self.window_mode == 'integrated' and self.wine_processes(identities) != set(identities):
+            raise RuntimeError('Non-Wine or unverifiable role in integrated session; cleanup deferred.')
+        return identities
+
+    def verify_wine_server_ownership(self, servers, identities):
+        """A prefix-scoped server command still requires session ownership.
+
+        The integrated mode never asks wineserver to stop an unauthenticated
+        same-prefix server, even if no Starter was found. Legacy nested recovery
+        retains its existing server contract.
+        """
+        if self.window_mode != 'integrated':
+            return
+        known = {identity.pid: identity for identity in identities}
+        if servers is None or not servers.issubset(known):
+            raise RuntimeError('Cannot verify dedicated Wine server ownership; cleanup deferred.')
+        expected = str(self.prefix.parent / 'runner-quantower/opt/wine-devel/bin/wineserver')
+        for pid in servers:
+            if owned_identity(pid, self.prefix, self.token) != known[pid]:
+                raise RuntimeError('Cannot verify dedicated Wine server identity; cleanup deferred.')
+            try:
+                executable = str((Path('/proc') / str(pid) / 'exe').readlink())
+            except OSError as error:
+                raise RuntimeError('Cannot verify dedicated Wine server executable; cleanup deferred.') from error
+            if executable.removesuffix(' (deleted)') != expected:
+                raise RuntimeError('Cannot verify dedicated Wine server executable; cleanup deferred.')
+
     def signal_identity(self, identity, signum):
         """A pidfd prevents the final check/signal race from hitting a recycled PID."""
         if not self.no_starter():
@@ -173,7 +257,16 @@ class SessionProcesses:
             return False
         try:
             if owned_identity(identity.pid, self.prefix, self.token) != identity:
+                if self.window_mode == 'integrated':
+                    current = live_identity(identity.pid)
+                    if current is not None and current.start_ticks == identity.start_ticks:
+                        raise RuntimeError('Cannot verify a recorded session process: identity credentials lost.')
                 return False
+            if self.window_mode == 'integrated':
+                self.verify_cleanup_roles(self.observe())
+            if not self.no_starter():
+                raise RuntimeError('Quantower became active; session cleanup deferred.')
+            self.verify_cleanup_roles({identity})
             signal.pidfd_send_signal(descriptor, signum)
             self.sent_signals.add((identity, signum))
             return True
@@ -218,6 +311,7 @@ class SessionProcesses:
             if not self.no_starter():
                 raise RuntimeError('Quantower became active; session cleanup deferred.')
             current = self.observe()
+            self.verify_cleanup_roles(current)
             if not (current if identities is None else current.intersection(identities)):
                 return True
             if time.monotonic() >= deadline:
@@ -232,7 +326,9 @@ class SessionProcesses:
         # joins the X11 compositor thread, then stops/waits its own children.
         # Terminating its Xwayland first instead invokes its fatal X11 I/O handler.
         # https://github.com/ValveSoftware/gamescope/blob/3.16.25/src/main.cpp#L492-L505
-        compositors = self.compositors(self.observe())
+        observed = self.observe()
+        self.verify_cleanup_roles(observed)
+        compositors = self.compositors(observed) if self.window_mode == 'nested' else set()
         if compositors:
             for identity in self.observe().intersection(compositors):
                 self.signal_identity(identity, signal.SIGTERM)
@@ -259,12 +355,15 @@ class SessionProcesses:
 
         for signum, grace in ((signal.SIGTERM, term_seconds), (signal.SIGKILL, kill_seconds)):
             survivors = self.observe()
+            self.verify_cleanup_roles(survivors)
             self.wine_helpers.update(self.wine_processes(survivors))
             for identity in survivors:
                 self.signal_identity(identity, signum)
             if self.wait_for_exit(None, grace):
                 return True
-        return not self.observe()
+        survivors = self.observe()
+        self.verify_cleanup_roles(survivors)
+        return not survivors
 
 
 def cleanup_session(session, runner, env, output, log, server_timeout=15):
@@ -273,8 +372,10 @@ def cleanup_session(session, runner, env, output, log, server_timeout=15):
         log('Quantower is still active; leaving its dedicated session running.')
         return False
     try:
-        session.observe()
+        observed = session.observe()
+        session.verify_cleanup_roles(observed)
         servers = prefix_processes(session.prefix, ('wineserver', 'wineserver64'))
+        session.verify_wine_server_ownership(servers, observed)
         if servers == set():
             # Wine server/main.c exits !kill_lock_owner(); no current lock owner
             # therefore makes -k return 1 even after a normal server shutdown.
@@ -284,6 +385,13 @@ def cleanup_session(session, runner, env, output, log, server_timeout=15):
                 if not session.no_starter():
                     log('Quantower became active; session cleanup deferred.')
                     return False
+                observed = session.observe()
+                session.verify_cleanup_roles(observed)
+                if getattr(session, 'window_mode', 'nested') == 'integrated':
+                    servers = prefix_processes(session.prefix, ('wineserver', 'wineserver64'))
+                    session.verify_wine_server_ownership(servers, observed)
+                    if servers == set():
+                        break
                 subprocess.run([str(runner / 'wineserver'), option], env=env,
                                stdout=output, stderr=output, timeout=server_timeout, check=True)
     except (OSError, subprocess.SubprocessError):
@@ -348,6 +456,73 @@ def windows(log=None, environment=None):
         return False, False, False
 
 
+def authenticated_starters(session):
+    """None means uncertain; only exact owned Wine identities establish presence."""
+    current = prefix_processes(session.prefix)
+    if not current:
+        return current
+    try:
+        identities = {owned_identity(pid, session.prefix, session.token) for pid in current}
+        if None in identities or len(identities) != len(current):
+            return None
+        if session.wine_processes(identities) != identities:
+            return None
+        return current
+    except (OSError, RuntimeError):
+        return None
+
+
+def monitor_integrated(child, session, diagnostics, log, stopped, *, startup_seconds=90,
+                       disappearance_seconds=3):
+    """Supervise the app across a direct Wine bootstrap handoff, without retries.
+
+    Direct-child status and application liveness are different observations. An
+    unexpected bootstrap result remains sticky while a surviving Starter is left
+    running. Unknown observations reset continuous verified-absence evidence.
+    """
+    deadline = time.monotonic() + startup_seconds
+    appeared, gone, child_status = False, None, None
+    while not stopped():
+        # Discover/authenticate Starter BEFORE reacting to bootstrap exit.
+        current = authenticated_starters(session)
+        now = time.monotonic()
+        if current:
+            if not appeared:
+                session.observe()
+                log('Quantower Starter appeared.', event='starter_observed',
+                    phase='running', starter_pids=sorted(current))
+            appeared, gone = True, None
+        elif current is None:
+            gone = None
+        elif appeared and gone is None:
+            gone = now
+
+        status = child.poll()
+        if status is not None and child_status is None:
+            child_status = status
+            log('Direct Wine child exited; continuing bounded Starter supervision.',
+                event='child_exited', level='ERROR' if status != 0 else 'INFO',
+                child_exit_code=status, child_signal=-status if status < 0 else None,
+                child_exit_unexpected=status != 0, child_exited=True,
+                handoff_pending=not appeared, starter_observed=appeared)
+        if appeared and current == set() and gone is not None and now - gone >= disappearance_seconds:
+            log('Quantower Starter disappeared; application exit status is unavailable.',
+                event='starter_disappeared', level='WARNING', phase='stopping', starter_pids=[])
+            return (1 if child_status not in (None, 0) else 0), child_status
+        if not appeared and now >= deadline:
+            log('Startup failed: Starter did not appear within the startup deadline.',
+                event='startup_timeout', level='ERROR', phase='stopping', handoff_pending=False)
+            return 1, child_status
+        diagnostics.heartbeat(phase='running' if appeared else 'starting', child_pid=child.pid,
+                              starter_pids=sorted(current) if current is not None else None,
+                              child_exited=child_status is not None, handoff_pending=not appeared)
+        time.sleep(0.5)
+    signum = stopped()
+    log('Launcher stopped; preserving active or uncertain application processes.',
+        level='WARNING', event='launcher_signal', signal=signum)
+    return 128 + signum, child_status
+
+
 def main(*, base, diagnostics):
     base = Path(base).resolve()
     prefix = base / 'prefix'
@@ -404,11 +579,14 @@ def main(*, base, diagnostics):
         try:
             mode = profile_manager.load(base)
             launch_config = runtime_config.load(base)
+            runtime_config.validate_mode(launch_config, mode)
             x11_runtime = runtime_config.selected_x11(base, env)
         except (OSError, ValueError, RuntimeError) as error:
             log(f'Cannot start dedicated runtime: {error}', level='ERROR', exception=True)
             return 1
         env['QUANTOWER_X11_RUNTIME'] = x11_runtime
+        log('Selected window management mode.', event='window_mode_selected',
+            requested_window_mode=launch_config.window_mode)
         runtime_config.apply_wine_library_environment(base, env, x11_runtime)
         log('Selected X11 client runtime.', event='x11_runtime_selected', x11_runtime=x11_runtime,
             library_directory=env.get('LD_LIBRARY_PATH'),
@@ -422,7 +600,7 @@ def main(*, base, diagnostics):
         # Gamescope windows belong to its private X server. Exact-prefix process
         # ownership is authoritative; host xwininfo cannot establish their state.
         desktop = False
-        if mode == 'compatible':
+        if mode == 'compatible' and launch_config.window_mode == 'nested':
             desktop, visible, reliable = windows(log, environment=env)
             if not reliable:
                 log('Cannot verify the compatible desktop state.', level='ERROR')
@@ -439,12 +617,16 @@ def main(*, base, diagnostics):
             if not cleanup() or prefix_processes(prefix) != set():
                 return 1
         try:
-            profile_manager.prepare(base, mode)
+            if launch_config.window_mode == 'integrated':
+                profile_manager.no_running_prefix(prefix)
+                runtime_config.integrated_preflight(base, launch_config, env)
+            profile_manager.prepare(base, mode, wine_dpi=launch_config.wine_dpi)
         except (OSError, ValueError, RuntimeError) as error:
             log(f'Cannot apply rendering profile: {error}', level='ERROR', exception=True)
             return 1
-        log(f'Applied rendering profile: {mode}', event='profile_applied', profile=mode)
-        session.begin()
+        log(f'Applied rendering profile: {mode}', event='profile_applied', profile=mode,
+            effective_wine_dpi=runtime_config.effective_wine_dpi(launch_config, mode))
+        session.begin(window_mode=launch_config.window_mode)
         env[SESSION_VARIABLE] = session.token
 
         stopped = 0
@@ -459,20 +641,33 @@ def main(*, base, diagnostics):
         child = None
         observed_exit_status = None
         try:
-            command = ([str(base / 'render-launch.sh')] if mode == 'gpu' else
-                       [str(runner / 'wine'), 'explorer.exe',
-                        launch_config.wine_desktop,
-                        application.windows_executable])
-            if mode == 'compatible':
+            if launch_config.window_mode == 'integrated':
+                plan = runtime_config.build_integrated_launch(base, launch_config, env)
+                plan.prepare()
+                command, child_env = plan.arguments, plan.environment
+            else:
+                command = ([str(base / 'render-launch.sh')] if mode == 'gpu' else
+                           [str(runner / 'wine'), 'explorer.exe',
+                            launch_config.wine_desktop, application.windows_executable])
+                child_env = env
+            if mode == 'compatible' and launch_config.window_mode == 'nested':
                 runtime_config.apply_trace_environment(base, env)
             child = subprocess.Popen(
                 command,
                 cwd=application.directory,
-                env=env, stdout=output, stderr=output, close_fds=True)
-            log('Started the dedicated Wine desktop.', event='child_started', child_pid=child.pid, profile=mode)
+                env=child_env, stdout=output, stderr=output, close_fds=True)
+            log('Started the dedicated Wine launch child.', event='child_started', child_pid=child.pid, profile=mode,
+                window_mode=launch_config.window_mode,
+                display_backend='host-x11' if launch_config.window_mode == 'integrated' else
+                                ('gamescope-xwayland' if mode == 'gpu' else 'wine-virtual-desktop'),
+                child_role='wine' if launch_config.window_mode == 'integrated' else
+                           ('compositor' if mode == 'gpu' else 'wine-desktop'))
             owned = True
             session.remember_child(child.pid)
             session.observe()
+            if launch_config.window_mode == 'integrated':
+                code, observed_exit_status = monitor_integrated(child, session, diagnostics, log, lambda: stopped)
+                return code
             deadline, appeared, gone = time.monotonic() + 90, False, None
             while not stopped:
                 status = child.poll()

@@ -197,6 +197,9 @@ def assemble(args):
     try:
         for name in SOURCE_FILES:
             copy_owned_file(ROOT / name, temporary / name)
+        documentation = temporary / 'docs'
+        documentation.mkdir(mode=0o700)
+        copy_owned_file(ROOT / 'docs/INTEGRATED-WINDOWS.md', documentation / 'INTEGRATED-WINDOWS.md')
         helpers = temporary / 'tools'
         helpers.mkdir(mode=0o700)
         copy_owned_file(ROOT / 'tools/isolate-icon-fonts.py', helpers / 'isolate-icon-fonts.py')

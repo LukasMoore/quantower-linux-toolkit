@@ -72,6 +72,14 @@ class InstallationTests(unittest.TestCase):
         for name in installer.SOURCE_FILES:
             self.assertTrue((self.target / name).is_file(), name)
         self.assertTrue((self.target / 'runtime-components/install-inventory.json').is_file())
+        guide = self.target / 'docs/INTEGRATED-WINDOWS.md'
+        self.assertEqual(guide.read_bytes(), (ROOT / 'docs/INTEGRATED-WINDOWS.md').read_bytes())
+        inventory = json.loads((self.target / 'runtime-components/install-inventory.json').read_text())
+        self.assertEqual(inventory['docs/INTEGRATED-WINDOWS.md'], hashlib.sha256(guide.read_bytes()).hexdigest())
+        config = json.loads((self.target / 'launcher-config.json').read_text())
+        self.assertEqual(config['window_mode'], 'nested')
+        self.assertIsNone(config['host_display'])
+        self.assertIsNone(config['wine_dpi'])
         self.assertFalse((self.target / 'prefix/user.reg').exists())
         self.assertEqual(self.target.stat().st_mode & 0o777, 0o700)
         # Hash failures block future launches after the copied source changes.

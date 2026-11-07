@@ -1,0 +1,13 @@
+--- a/dlls/comctl32/tooltips.c
++++ b/dlls/comctl32/tooltips.c
+@@ -1758,8 +1758,8 @@
+ static LRESULT
+ TOOLTIPS_TrackPosition (TOOLTIPS_INFO *infoPtr, LPARAM coord)
+ {
+-    infoPtr->xTrackPos = (INT)LOWORD(coord);
+-    infoPtr->yTrackPos = (INT)HIWORD(coord);
++    infoPtr->xTrackPos = (INT)(SHORT)LOWORD(coord);
++    infoPtr->yTrackPos = (INT)(SHORT)HIWORD(coord);
+ 
+     if (infoPtr->bTrackActive) {
+ 	TRACE("[%d %d]\n",

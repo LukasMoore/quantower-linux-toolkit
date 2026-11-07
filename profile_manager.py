@@ -119,9 +119,17 @@ def registry_dword(text, key, name, value):
     return text[:start] + content + text[end:]
 
 
-def prepare(base: Path, mode: str):
+def effective_dpi(mode: str, wine_dpi=None):
+    """Validate a launch override before any prefix or backup mutation."""
     if mode not in ('gpu', 'compatible'):
         raise RuntimeError('Unknown rendering profile.')
+    if wine_dpi is not None and (type(wine_dpi) is not int or not 96 <= wine_dpi <= 480):
+        raise ValueError('wine_dpi must be null or an integer from 96 to 480.')
+    return wine_dpi if wine_dpi is not None else (96 if mode == 'gpu' else 192)
+
+
+def prepare(base: Path, mode: str, *, wine_dpi=None):
+    dpi = effective_dpi(mode, wine_dpi)
     prefix = base / 'prefix'
     no_running_prefix(prefix)
     settings = prefix / 'drive_c/AMPQuantowerInstalled/Settings/settings.xml'
@@ -146,7 +154,6 @@ def prepare(base: Path, mode: str):
             matches[0].find('Value').text = 'false' if mode == 'gpu' else 'true'
             new_settings = ET.tostring(tree, encoding='utf-8', xml_declaration=True)
     text = prior[registry][1].decode('utf-8')
-    dpi = 96 if mode == 'gpu' else 192
     for key in (r'Control Panel\\Desktop', r'Software\\Wine\\Fonts'):
         text = registry_dword(text, key, 'LogPixels', dpi)
     # This documented WPF setting also covers first launch before vendor settings

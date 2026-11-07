@@ -187,6 +187,15 @@ output size. `refresh_hz` and `idle_refresh_hz` control cadence. An optional
 default. Audio/display endpoint overrides are optional. Changing a setting affects
 the next launch.
 
+Independent host-managed windows are available through the experimental, explicit
+`window_mode: "integrated"` option with the GPU rendering profile. The default
+remains `nested`. `host_display` selects a local X11 endpoint and `wine_dpi` can
+set an explicit integrated DPI through the guarded profile transaction; both are
+`null` by default and must remain null in nested mode. Nested geometry/fullscreen
+fields are inactive in integrated mode. Use an alternate private configuration
+for trials and read [the integrated-window guide](docs/INTEGRATED-WINDOWS.md) for
+preflight, DPI limits, physical acceptance and coherent rollback.
+
 From the installed target:
 
 ```bash
@@ -203,12 +212,14 @@ python3 select-profile.py compatible
 python3 select-profile.py gpu
 ```
 
-The GPU profile requires its compositor and graphics dependencies. The compatible
+Nested GPU mode requires its compositor and graphics dependencies. Integrated GPU
+mode uses host X11/Xwayland directly while retaining complete manifest verification. The compatible
 profile uses Wine's available rendering path and also needs a reachable desktop
 X server. Neither profile establishes cross-GPU validation by configuration alone.
 Profile selection is an external troubleshooting configuration scoped to this
 dedicated Wine prefix. Compatible mode sets the WPF software-rendering option and
-192 DPI; GPU mode enables its normal hardware path at 96 DPI. Existing vendor
+192 DPI; GPU mode enables its normal hardware path at 96 DPI unless an explicit
+integrated `wine_dpi` is selected. Existing vendor
 settings are updated only where the corresponding setting already exists; first
 launch does not fabricate a vendor settings file. Host Windows registry settings
 are never changed. See Microsoft's [WPF rendering settings](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/graphics-multimedia/graphics-rendering-registry-settings).

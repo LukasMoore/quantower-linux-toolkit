@@ -1,0 +1,54 @@
+--- a/dlls/winex11.drv/bitblt.c
++++ b/dlls/winex11.drv/bitblt.c
+@@ -1589,6 +1589,8 @@
+     GC                    gc;
+     struct x11drv_image  *image;
+     BOOL                  byteswap;
++    LONG                  preserve_minimized_preview;
++    BOOL                  pending_shape;
+ };
+ 
+ static struct x11drv_window_surface *get_x11_surface( struct window_surface *surface )
+@@ -1798,6 +1800,16 @@
+     const unsigned char *src = color_bits;
+     unsigned char *dst = (unsigned char *)ximage->data;
+ 
++    /* Keep the last normal pixels and shape for compositors retaining iconic windows.
++     * Cache the decision in CreateWindowSurface: flush already holds the surface
++     * mutex, so querying window/user data here would invert the existing locks. */
++    if (InterlockedCompareExchange( &surface->preserve_minimized_preview, 0, 0 ))
++    {
++        surface->pending_shape |= shape_changed;
++        return FALSE; /* retain dirty bounds for the next normal-state flush */
++    }
++    shape_changed |= surface->pending_shape;
++
+     if (alpha_bits == -1)
+     {
+         if (alpha_mask || color_info->bmiHeader.biBitCount != 32) alpha_bits = 0;
+@@ -1854,6 +1866,7 @@
+                    dirty->right - dirty->left, dirty->bottom - dirty->top );
+ 
+     XFlush( gdi_display );
++    surface->pending_shape = FALSE;
+ 
+     return TRUE;
+ }
+@@ -1997,6 +2010,17 @@
+                                layered ? data->use_alpha : FALSE );
+ 
+ done:
++    if (*surface && (*surface)->funcs == &x11drv_surface_funcs)
++    {
++        const char *preserve = getenv( "QTK_PRESERVE_MINIMIZED_PREVIEW" );
++
++        /* Only direct-host managed windows have a compositor-owned preview. */
++        InterlockedExchange( &get_x11_surface( *surface )->preserve_minimized_preview,
++                             preserve && !strcmp( preserve, "1" ) && data->managed &&
++                             !data->embedded && data->whole_window != root_window &&
++                             !is_virtual_desktop() &&
++                             (NtUserGetWindowLongW( hwnd, GWL_STYLE ) & WS_MINIMIZE) );
++    }
+     release_win_data( data );
+     return TRUE;
+ }

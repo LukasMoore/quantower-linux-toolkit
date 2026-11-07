@@ -44,6 +44,36 @@ Read README.md for installation and THIRD_PARTY.md for licensing boundaries.
   patch a signed vendor DLL to hide errors, or publish proprietary resource files.
 - Maintain this document when changing logging paths, retention or commands.
 
+## Experimental integrated windows
+
+- `window_mode=nested` stays the default. Integrated v1 supports GPU only; reject
+  integrated+compatible and nested non-null host/DPI fields before prefix writes.
+- Read [docs/INTEGRATED-WINDOWS.md](docs/INTEGRATED-WINDOWS.md) before changing the
+  direct-launch plan, connection preflight, DPI transaction or mode-aware recovery.
+  Builders and doctor remain read-only; only explicit launch preflight connects.
+- Preserve complete runtime manifest checks and the dedicated Wine/private-Xlib/
+  DXVK closure. Never adopt, signal, unlink or restart host display/native services.
+  Integrated cleanup additionally requires exact dedicated Wine executable roles at
+  each boundary; same-birth identity loss/unknown roles remain uncertain in ledger.
+- Recover the prior ledger mode before beginning a newly requested mode. Continue
+  supervising Starter after bootstrap exit and keep unexpected child failure sticky.
+- Apply explicit DPI only through `prepare(..., wine_dpi=...)` under the existing
+  inactive-prefix/shared-lock gates. Do not alter vendor awareness or signed files.
+- Offline and own-fixture passes do not prove physical multi-monitor behavior. Keep
+  live input guards, hooks off and GPU-fault stop rules. No automatic recovery.
+- Wine 11.20 patch `0007-comctl32-signed-tracking-tooltip-coordinates.patch` fixes
+  only signed 16-bit extraction of `TTM_TRACKPOSITION` screen x/y. Retain every
+  prior patch, complete runtime hash verification, tooltip placement rules and
+  signed vendor files. Test
+  common-controls v5/v6 with negative and nonnegative controls; own-fixture passes
+  still require separate host/application popup acceptance. Preserve zero-width
+  and outside-workarea failures; signed decoding does not prove visible placement.
+  This is a local
+  correction, not upstream acceptance or a GPU-lockup fix. Source builds include
+  the added patch; existing published 0.2.0 archives remain unchanged.
+- Old-code rollback requires an old-parser-compatible config without any new keys;
+  preserve outside edits and never restore whole current account/workspace state.
+
 ## Logging architecture
 
 `launch.sh` sets a private umask and calls `diagnostics.py run`. Diagnostics acquires

@@ -35,6 +35,14 @@
         {
           "path": "patches/wine/0006-win32u-unsnapped-pointer-tracking.patch",
           "sha256": "c3461d5cbb7310f6675e883cc46e5c17cae8be2beb8425dad8bde764775ea092"
+        },
+        {
+          "path": "patches/wine/0007-comctl32-signed-tracking-tooltip-coordinates.patch",
+          "sha256": "9333d46d899770dbd12f21d1f4e20387a8618eed6a883bfc39214f4077ace516"
+        },
+        {
+          "path": "patches/wine/0009-winex11-preserve-minimized-preview.patch",
+          "sha256": "c0a85a17b9a06e4694b336661017961cf34819685fde1b3ac3abe0642ba108a8"
         }
       ],
       "license": "LGPL-2.1-or-later",

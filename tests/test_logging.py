@@ -173,6 +173,16 @@ class LoggingTests(unittest.TestCase):
         self.assertEqual(summary['status'], 'failed')
         self.assertEqual(summary['child_final_exit_code'], -signal.SIGSEGV)
 
+    def test_deferred_cleanup_cannot_finalize_as_success(self):
+        def deferred(*, base, diagnostics):
+            diagnostics.event('cleanup_finished', 'Uncertain process ownership.', cleanup_complete=False)
+            return 0
+        with mock.patch.dict(sys.modules, {'supervisor': types.SimpleNamespace(main=deferred)}):
+            self.assertEqual(diagnostics.run(self.base), 1)
+        summary = json.loads((self.base / 'logs/latest-session.json').read_text())
+        self.assertEqual(summary['status'], 'failed')
+        self.assertFalse(summary['cleanup_complete'])
+
     def test_active_starter_preserved_without_preparation_or_cleanup(self):
         self.runtime()
         with mock.patch.object(supervisor, 'prefix_processes', return_value={456}), \

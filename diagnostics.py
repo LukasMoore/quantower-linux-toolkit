@@ -169,9 +169,12 @@ class SessionLog:
     def event(self, event, message, *, level='INFO', exception=False, **fields):
         if level == 'ERROR' and (event != 'session_finished' or 'last_error' not in self.record):
             self.record['last_error'] = dict(event=event, message=message, timestamp=utc_now())
-        for field in ('profile', 'child_pid', 'child_exit_code', 'child_signal', 'cleanup_complete',
+        durable_fields = ('profile', 'child_pid', 'child_exit_code', 'child_signal', 'cleanup_complete',
                       'x11_runtime', 'application_version', 'child_final_exit_code', 'child_exit_unexpected',
-                      'cleanup_required_force', 'cleanup_forced_wine_helpers', 'phase', 'starter_pids'):
+                      'cleanup_required_force', 'cleanup_forced_wine_helpers', 'phase', 'starter_pids',
+                      'requested_window_mode', 'window_mode', 'display_backend', 'effective_wine_dpi',
+                      'child_role', 'child_exited', 'handoff_pending', 'cleanup_sent_child_sigterm')
+        for field in durable_fields:
             if field in fields:
                 self.record[field] = fields[field]
         if fields.get('cleanup_complete') is True:
@@ -187,7 +190,7 @@ class SessionLog:
         self.loggers[1].log(getattr(logging, level), json.dumps(record, ensure_ascii=True))
         # Persist lifecycle observations immediately; the next heartbeat can be 60s
         # away. Heartbeat and finish already save after their remaining updates.
-        if event != 'heartbeat' and any(field in fields for field in ('phase', 'starter_pids', 'cleanup_complete')):
+        if event != 'heartbeat' and any(field in fields for field in durable_fields):
             self._save()
 
     def _pump(self):
@@ -339,7 +342,8 @@ def run(base):
                 with contextlib.redirect_stdout(PythonOutput(diagnostics, 'INFO')), contextlib.redirect_stderr(PythonOutput(diagnostics, 'ERROR')):
                     import supervisor
                     code = supervisor.main(base=base, diagnostics=diagnostics)
-                    if code == 0 and diagnostics.record.get('child_exit_unexpected'):
+                    if code == 0 and (diagnostics.record.get('child_exit_unexpected') or
+                                      diagnostics.record.get('cleanup_complete') is False):
                         code = 1
             except KeyboardInterrupt:
                 code = 130

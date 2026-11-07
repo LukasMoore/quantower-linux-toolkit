@@ -69,7 +69,39 @@ def check_environment(base, *, source_only=False, environment=None):
     except (OSError, ValueError, TypeError) as error:
         add('application', False, str(error))
     add('prefix', (base / 'prefix/user.reg').is_file(), 'A dedicated initialized 64-bit Wine prefix is required.')
-    if mode == 'compatible':
+    window_mode = config.window_mode if config is not None else 'nested'
+    if config is not None and mode is not None:
+        try:
+            runtime_config.validate_mode(config, mode)
+            add('window_mode', True, 'Requested window mode: ' + window_mode + '; rendering: ' + mode)
+        except (ValueError, RuntimeError) as error:
+            add('window_mode', False, str(error))
+    if window_mode == 'integrated':
+        if config is not None:
+            try:
+                runtime_config.integrated_display(base, config, environment)
+                add('x11_display', True, 'A local host DISPLAY is configured. Reachability and authentication are checked only at launch.')
+            except (OSError, ValueError, RuntimeError) as error:
+                add('x11_display', False, str(error))
+            try:
+                runtime_config.validate_integrated_preferences(base)
+                add('wine_window_preferences', True, 'No conflicting Wine desktop, unmanaged-window or graphics-driver preference was found.')
+            except (OSError, ValueError, RuntimeError) as error:
+                add('wine_window_preferences', False, str(error))
+        try:
+            runtime_config.resolve_xwininfo(base, environment)
+            add('xwininfo', True, 'Passive root-metadata probe is available; doctor has not executed it or connected to the display.')
+        except (OSError, ValueError, RuntimeError) as error:
+            add('xwininfo', False, str(error))
+        try:
+            x11 = runtime_config.selected_x11(base, environment)
+            available = x11 == 'private' or ctypes.util.find_library('X11') is not None
+            add('x11_libraries', available, 'Wine requires its selected X11 library closure; no graphical connection was attempted.')
+        except (OSError, ValueError, RuntimeError) as error:
+            add('x11_libraries', False, str(error))
+        add('vulkan_loader', ctypes.util.find_library('vulkan') is not None,
+            'Vulkan loader is discoverable. This does not verify driver, extensions or device suitability.')
+    elif mode == 'compatible':
         add('x11_display', bool(environment.get('DISPLAY')), 'Compatible profile requires a working DISPLAY connection.')
         helper = base / 'runner-quantower/opt/wine-devel/bin/xwininfo'
         add('xwininfo', (helper.is_file() and os.access(helper, os.X_OK)) or shutil.which('xwininfo') is not None,
@@ -106,7 +138,7 @@ def check_environment(base, *, source_only=False, environment=None):
                     'Host PipeWire runtime directory; screen capture availability is not verified.', required=False)
             except (OSError, ValueError) as error:
                 add('host_display', False, str(error))
-    return {'schema_version': 1, 'scope': 'read-only installed-runtime checks', 'profile': mode,
+    return {'schema_version': 1, 'scope': 'read-only installed-runtime checks', 'profile': mode, 'window_mode': window_mode,
             'okay': not any(c['status'] == 'fail' for c in checks), 'checks': checks,
             'limits': 'Does not start Wine or the application, connect to displays, enumerate Vulkan devices, install dependencies, or test trading/data connections.'}
 

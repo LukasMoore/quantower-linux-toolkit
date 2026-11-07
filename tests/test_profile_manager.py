@@ -76,6 +76,45 @@ class ProfileTransactionTests(unittest.TestCase):
         self.inactive = patch.start()
         self.addCleanup(patch.stop)
 
+    def test_dpi_defaults_null_and_explicit_values_share_the_profile_transaction(self):
+        for mode, supplied, expected in (('gpu', None, 96), ('compatible', None, 192),
+                                         ('gpu', 96, 96), ('gpu', 192, 192),
+                                         ('gpu', 480, 480)):
+            with self.subTest(mode=mode, supplied=supplied), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory)
+                _, registry, dll, settings = installation(base)
+                account = ET.tostring(ET.fromstring(settings.read_bytes()).findall('Item')[1])
+                profile_manager.prepare(base, mode, wine_dpi=supplied)
+                text = registry.read_text()
+                self.assertEqual(text.count('"LogPixels"=dword:' + format(expected, '08x')), 2)
+                self.assertIn(REGISTRY, text)
+                self.assertEqual(ET.tostring(ET.fromstring(settings.read_bytes()).findall('Item')[1]), account)
+                applied = base / 'logs/applied-runtime-profile.json'
+                self.assertEqual(json.loads(applied.read_text())['dpi'], expected)
+                first = {p: profile_manager.file_state(p) for p in (registry, dll, settings, applied)}
+                profile_manager.prepare(base, mode, wine_dpi=supplied)
+                self.assertEqual(first, {p: profile_manager.file_state(p) for p in first})
+
+    def test_invalid_dpi_is_refused_before_prefix_discovery_or_any_write(self):
+        _, registry, dll, settings = installation(self.base)
+        before = {p: profile_manager.file_state(p) for p in (registry, dll, settings)}
+        for supplied in (True, False, 95, 481, 96.0, '192', [], {}):
+            with self.subTest(supplied=supplied), self.assertRaisesRegex(ValueError, 'wine_dpi'):
+                profile_manager.prepare(self.base, 'gpu', wine_dpi=supplied)
+            self.assertEqual(before, {p: profile_manager.file_state(p) for p in before})
+            self.assertFalse((self.base / 'logs').exists())
+        self.inactive.assert_not_called()
+
+    def test_explicit_dpi_does_not_bypass_active_or_uncertain_prefix_refusal(self):
+        _, registry, dll, settings = installation(self.base)
+        before = {p: profile_manager.file_state(p) for p in (registry, dll, settings)}
+        for reason in ('active prefix', 'unverifiable prefix'):
+            self.inactive.side_effect = RuntimeError(reason)
+            with self.assertRaisesRegex(RuntimeError, reason):
+                profile_manager.prepare(self.base, 'gpu', wine_dpi=192)
+            self.assertEqual(before, {p: profile_manager.file_state(p) for p in before})
+            self.assertFalse((self.base / 'logs').exists())
+
     def test_first_launch_without_vendor_xml_uses_scoped_wpf_setting(self):
         prefix, registry, dll, settings = installation(self.base, settings=None, original_d3d9=None)
         profile_manager.prepare(self.base, 'compatible')
@@ -186,7 +225,7 @@ class ProfileTransactionTests(unittest.TestCase):
                         raise OSError('synthetic write failure')
                     return original_atomic(path, data, mode)
                 with mock.patch.object(profile_manager, 'atomic_bytes', side_effect=atomic), self.assertRaisesRegex(OSError, 'synthetic'):
-                    profile_manager.prepare(base, 'gpu')
+                    profile_manager.prepare(base, 'gpu', wine_dpi=192)
                 self.assertTrue(failed)
                 self.assertEqual(states, {p: profile_manager.file_state(p) for p in states})
                 self.assertFalse(applied.exists())
