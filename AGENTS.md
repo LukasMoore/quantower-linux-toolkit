@@ -57,6 +57,12 @@ Read README.md for installation and THIRD_PARTY.md for licensing boundaries.
   each boundary; same-birth identity loss/unknown roles remain uncertain in ledger.
 - Recover the prior ledger mode before beginning a newly requested mode. Continue
   supervising Starter after bootstrap exit and keep unexpected child failure sticky.
+- `session_restart.py` supplies optional desktop-adapter policy, not process
+  discovery or a recovery launcher. A finalized failed summary can offer one
+  explicit Cancel-default new-session choice only after guarded inactivity and
+  deployment verification. Preserve the adapter lock, fresh snapshot comparison
+  and normal front-door revalidation; cancellation/errors never authorize a start.
+  Never rewrite failed history or infer inactivity from summary status.
 - Apply explicit DPI only through `prepare(..., wine_dpi=...)` under the existing
   inactive-prefix/shared-lock gates. Do not alter vendor awareness or signed files.
 - Offline and own-fixture passes do not prove physical multi-monitor behavior. Keep

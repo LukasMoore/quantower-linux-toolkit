@@ -93,6 +93,52 @@ changed. Host Xwayland, GNOME and other native processes are never cleanup targe
 Forced Wine-helper cleanup remains explicit in warnings and summaries. Never
 force-kill Starter, kill process groups or use an unscoped wineserver command.
 
+## Explicit new-session choices in desktop adapters
+
+A desktop adapter that accepts only a previous `finished`/exit-0 summary can block
+every later open after a failed session, even when cleanup completed. The shared
+`session_restart.py` policy distinguishes a finalized failure from unfinished or
+unverifiable history. It can offer **Start a new session**, with Cancel focused by
+default, after the adapter proves the installation is fully stopped. This does not
+establish why the earlier application session failed or fix its shutdown behavior.
+
+This is a source API for optional desktop adapters. The public toolkit does not
+include an Open-or-Recover desktop frontend. The normal `launch.sh` remains the
+front door; adding this policy does not change its behavior or enable automatic
+restarts. New installations include the module for adapter integrations.
+
+`stopped_session_state(summary)` classifies an already authenticated summary as
+`inactive` or `inactive-failed`, or raises on incomplete/inconsistent data. History
+alone never proves process inactivity. A failed session must have a nonzero integer
+exit, completed cleanup, final failed phase, a valid session ID and timezone-aware
+end timestamp, an exited child, no Starter PIDs and no pending handoff.
+
+`confirm_failed_session_start(...)` requires four no-argument callbacks:
+
+- `inactive_lock`: acquire the normal shared launch lock and verify canonical
+  prefix inactivity, recorded process births and all users of the dedicated
+  runtime. Unknown ownership must refuse. It returns a context manager and runs
+  again after acceptance.
+- `read_summary`: safely read a fresh private JSON object with ownership, regular
+  file, path and size checks; refuse missing, redirected or malformed files.
+- `verify_deployment`: verify the complete selected runtime manifest and adapter
+  configuration while the inactivity lock is held.
+- `ask`: show the explicit choice and return an integer exit code: 0 accepts,
+  1 cancels. Other codes, booleans and exceptions refuse. The provided
+  `ask_start_new_session()` uses `/usr/bin/zenity` with Cancel selected by default.
+
+The question appears outside the shared launch lock. Acceptance reacquires that
+lock and compares the complete fresh summary with the original snapshot. The
+adapter must hold its own duplicate-action lock across classification, confirmation
+and start. Only a True result may reach its one-shot normal front-door request,
+which must repeat the production inactivity, deployment and ownership checks.
+Concurrent launches can refuse; never retry, signal processes or switch backend.
+Recovery-only actions must never ask to start or start a new application session.
+
+The policy never launches the app, changes a summary, cleans up processes or retries.
+The portable regressions use synthetic summaries and mocked callbacks/GUI; they do
+not establish physical desktop behavior or resolve application shutdown hangs.
+
 ## DPI and acceptance limits
 
 Physical scanout, desktop logical coordinates, X11 backing pixels, Win32 virtualized

@@ -23,7 +23,7 @@ import runtime_config
 import supervisor
 
 SOURCE_FILES = ('launch.sh', 'render-launch.sh', 'application_runtime.py', 'diagnostics.py',
-                'profile_manager.py', 'runtime_config.py', 'supervisor.py', 'support-bundle.py',
+                'profile_manager.py', 'runtime_config.py', 'supervisor.py', 'session_restart.py', 'support-bundle.py',
                 'select-profile.py', 'doctor.py', 'gpu-dxvk.conf', 'AGENTS.md', 'README.md',
                 'SECURITY.md', 'CONTRIBUTING.md', 'launcher-config.example.json', 'LICENSE', 'THIRD_PARTY.md')
 
