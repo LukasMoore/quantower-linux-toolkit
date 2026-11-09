@@ -19,6 +19,17 @@ the normal application UI. See Quantower's [standalone panels](https://help.quan
 [Groups](https://help.quantower.com/quantower/general-settings/group-of-panels)
 and [Binds](https://help.quantower.com/quantower/general-settings/binds) guides.
 
+## Native placement source checkpoint
+
+Optional Wine patches 0010/0011 are experimental and off by default.
+**Patch 0011 has a known regression: custom fullscreen, minimize, maximize and
+close controls can stop working because they share `HTCAPTION` with the header.**
+Distinct `HTCLOSE` fixture checks do not establish custom caption-button behavior.
+This is an incomplete source checkpoint, not a production-ready grouping fix.
+See [native window authority scope and trace parameters](NATIVE-WINDOW-AUTHORITY.md).
+The launcher does not enable these flags automatically, and published prebuilt
+assets are unchanged.
+
 ## Configuration and one-launch selection
 
 Close the application normally before maintenance. Keep the regular launcher

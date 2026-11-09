@@ -8,6 +8,12 @@ Review the source and test it yourself in an isolated demo environment on your o
 hardware before trusting it with accounts, data or live trading. This experimental
 release has not established production readiness.
 
+**Experimental source checkpoint — known title bar regression:** optional Wine
+patch 0011 can disable custom fullscreen, minimize, maximize and close controls.
+Patches 0010/0011 are off by default and are not a completed native-grouping fix.
+Read the [native window authority checkpoint](docs/NATIVE-WINDOW-AUTHORITY.md)
+before evaluating this source. Published v0.2.0 assets are unchanged.
+
 **Prebuilt download:** [v0.2.0 — Debian 13 x86-64 runtime bundle](https://github.com/LukasMoore/quantower-linux-toolkit/releases/tag/v0.2.0).
 The release includes the runtime archive, SHA256 checksums, matching source
 companion and [verification report](https://github.com/LukasMoore/quantower-linux-toolkit/releases/download/v0.2.0/quantower-linux-runtime-v0.2.0-verification.json).

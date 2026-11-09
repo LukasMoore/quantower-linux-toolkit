@@ -1,0 +1,301 @@
+--- a/dlls/user32/winproc.c
++++ b/dlls/user32/winproc.c
+@@ -28,6 +28,7 @@
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(msg);
+ WINE_DECLARE_DEBUG_CHANNEL(relay);
++WINE_DECLARE_DEBUG_CHANNEL(qtkcaption);
+ 
+ static inline void *get_buffer( void *static_buffer, size_t size, size_t need )
+ {
+@@ -99,15 +100,165 @@
+         return MAKEWPARAM( ch[0], HIWORD(wParam) );
+ }
+ 
++
++/* Private direct-host opt-in: let ordinary caption moves bypass application
++ * grouping interception without changing any other non-client message. */
++static const WCHAR qtk_caption_move_option[] = L"QTK_NATIVE_CAPTION_MOVE";
++static const WCHAR qtk_caption_trace_option[] = L"QTK_NATIVE_CAPTION_TRACE";
++static const WCHAR qtk_native_placement_prop[] = L"__wine_qtk_native_placement";
++static const WCHAR qtk_caption_move_prop[] = L"__wine_qtk_native_caption_move";
++static const WCHAR qtk_whole_window_prop[] = L"__wine_x11_whole_window";
++static LONG qtk_caption_trace_count;
++static LONG qtk_caption_trace_started;
++static DWORD qtk_caption_trace_start_tick;
++static _Thread_local LONG qtk_caption_trace_parent;
++static _Thread_local UINT qtk_caption_trace_depth;
++
++static BOOL qtk_option_one( const WCHAR *name )
++{
++    WCHAR value[2];
++    return GetEnvironmentVariableW( name, value, ARRAY_SIZE(value) ) == 1 && value[0] == '1';
++}
++
++/* Internal text/class queries read server metadata, never WM_GETTEXT callbacks. */
++static BOOL qtk_caption_scope( HWND hwnd )
++{
++    static const WCHAR class_prefix[] = L"HwndWrapper[Starter;;";
++    WCHAR class_name[128], title[64];
++    DWORD pid, owner_pid, tid, owner_tid;
++    HWND owner;
++    LONG style, ex_style;
++    INT prefix_len = ARRAY_SIZE(class_prefix) - 1;
++
++    tid = GetWindowThreadProcessId( hwnd, &pid );
++    if (tid != GetCurrentThreadId() || pid != GetCurrentProcessId()) return FALSE;
++    if (NtUserGetAncestor( hwnd, GA_ROOT ) != hwnd) return FALSE;
++    style = GetWindowLongW( hwnd, GWL_STYLE );
++    ex_style = GetWindowLongW( hwnd, GWL_EXSTYLE );
++    if (!(style & WS_THICKFRAME) || (style & (WS_CHILD | WS_POPUP))) return FALSE;
++    if (!(ex_style & WS_EX_APPWINDOW) || (ex_style & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_DLGMODALFRAME))) return FALSE;
++    if (GetClassNameW( hwnd, class_name, ARRAY_SIZE(class_name) ) < prefix_len ||
++        memcmp( class_name, class_prefix, prefix_len * sizeof(WCHAR) )) return FALSE;
++    if (!NtUserInternalGetWindowText( hwnd, title, ARRAY_SIZE(title) ) ||
++        (wcscmp( title, L"Chart" ) && wcscmp( title, L"Group" ))) return FALSE;
++    if (!(owner = GetWindow( hwnd, GW_OWNER ))) return FALSE;
++    owner_tid = GetWindowThreadProcessId( owner, &owner_pid );
++    if (owner_tid != tid || owner_pid != pid || GetWindow( owner, GW_OWNER ) ||
++        NtUserGetAncestor( owner, GA_ROOT ) != owner) return FALSE;
++    if (!(GetWindowLongW( owner, GWL_STYLE ) & WS_VISIBLE) || !IsWindowEnabled( owner )) return FALSE;
++    if (GetClassNameW( owner, class_name, ARRAY_SIZE(class_name) ) < prefix_len ||
++        memcmp( class_name, class_prefix, prefix_len * sizeof(WCHAR) )) return FALSE;
++    return NtUserInternalGetWindowText( owner, title, ARRAY_SIZE(title) ) && !wcscmp( title, L"AMP Quantower" );
++}
++
++enum qtk_caption_action { QTK_CAPTION_PASS, QTK_CAPTION_NATIVE, QTK_CAPTION_BLOCK_UNSUPPORTED };
++
++static enum qtk_caption_action qtk_caption_action( const struct win_proc_params *params )
++{
++    DWORD error = NtCurrentTeb()->LastErrorValue;
++    enum qtk_caption_action action = QTK_CAPTION_PASS;
++    HANDLE whole;
++    LONG style;
++
++    if (params->msg != WM_NCLBUTTONDOWN || params->wparam != HTCAPTION) return action;
++    if (params->procA == WINPROC_PROC16 || params->procW == WINPROC_PROC16) return action;
++    if (!qtk_option_one( qtk_caption_move_option ) || !qtk_caption_scope( params->hwnd )) goto done;
++    style = GetWindowLongW( params->hwnd, GWL_STYLE );
++    if (!(style & WS_VISIBLE) || (style & (WS_DISABLED | WS_MINIMIZE))) goto done;
++    whole = GetPropW( params->hwnd, qtk_whole_window_prop );
++    if (!whole || GetPropW( params->hwnd, qtk_native_placement_prop ) != whole) goto done;
++    action = GetPropW( params->hwnd, qtk_caption_move_prop ) == whole ?
++             QTK_CAPTION_NATIVE : QTK_CAPTION_BLOCK_UNSUPPORTED;
++done:
++    NtCurrentTeb()->LastErrorValue = error;
++    return action;
++}
++
++static BOOL qtk_caption_trace_message( UINT msg, WPARAM wp )
++{
++    switch (msg)
++    {
++    case WM_NCLBUTTONDOWN:
++    case WM_NCLBUTTONUP:
++    case WM_NCLBUTTONDBLCLK:
++    case WM_ENTERSIZEMOVE:
++    case WM_EXITSIZEMOVE:
++    case WM_CANCELMODE:
++    case WM_CAPTURECHANGED:
++        return TRUE;
++    case WM_SYSCOMMAND:
++        return (wp & 0xfff0) == SC_MOVE || (wp & 0xfff0) == SC_SIZE;
++    default:
++        return FALSE;
++    }
++}
++
++static LONG qtk_caption_trace_begin( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT reason,
++                                     LONG *parent, UINT *depth )
++{
++    DWORD error = NtCurrentTeb()->LastErrorValue;
++    LONG call = 0;
++
++    if (!qtk_caption_trace_message( msg, wp ) || !qtk_option_one( qtk_caption_trace_option ) ||
++        !qtk_caption_scope( hwnd )) goto done;
++    if (!InterlockedCompareExchange( &qtk_caption_trace_started, 1, 0 ))
++    {
++        qtk_caption_trace_start_tick = GetTickCount();
++        InterlockedExchange( &qtk_caption_trace_started, 2 );
++    }
++    if (InterlockedCompareExchange( &qtk_caption_trace_started, 2, 2 ) != 2 ||
++        (DWORD)(GetTickCount() - qtk_caption_trace_start_tick) >= 600000) goto done;
++    call = InterlockedIncrement( &qtk_caption_trace_count );
++    if (call > 1024)
++    {
++        if (call == 1025)
++            WARN_(qtkcaption)( "QTKCAP phase=2 call=%ld tid=%lu tick=%lu limit=1024 reason=3\n",
++                              call, GetCurrentThreadId(), GetTickCount() );
++        call = 0;
++        goto done;
++    }
++    *parent = qtk_caption_trace_parent;
++    *depth = qtk_caption_trace_depth;
++    qtk_caption_trace_parent = call;
++    qtk_caption_trace_depth++;
++    WARN_(qtkcaption)( "QTKCAP phase=0 call=%ld parent=%ld depth=%u tid=%lu tick=%lu hwnd=%p msg=%u hit=%d command=%u capture=%p reason=%u\n",
++        call, *parent, *depth, GetCurrentThreadId(), GetTickCount(), hwnd, msg,
++        msg >= WM_NCLBUTTONDOWN && msg <= WM_NCLBUTTONDBLCLK &&
++        (INT_PTR)wp >= HTERROR && (INT_PTR)wp <= HTHELP ? (int)(INT_PTR)wp : 0,
++        msg == WM_SYSCOMMAND ? (UINT)(wp & 0xfff0) : 0,
++        msg == WM_CAPTURECHANGED ? (HWND)lp : 0, reason );
++done:
++    NtCurrentTeb()->LastErrorValue = error;
++    return call;
++}
++
++static void qtk_caption_trace_end( LONG call, LONG parent, UINT depth, HWND hwnd, UINT msg,
++                                   LRESULT result, UINT reason )
++{
++    DWORD error = NtCurrentTeb()->LastErrorValue;
++    int hit = msg == WM_NCHITTEST && result >= HTERROR && result <= HTHELP ? result : 0;
++
++    if (!call) return;
++    WARN_(qtkcaption)( "QTKCAP phase=1 call=%ld parent=%ld depth=%u tid=%lu tick=%lu hwnd=%p msg=%u hit=%d result_zero=%u reason=%u\n",
++        call, parent, depth, GetCurrentThreadId(), GetTickCount(), hwnd, msg, hit, !result, reason );
++    qtk_caption_trace_parent = parent;
++    qtk_caption_trace_depth = depth;
++    NtCurrentTeb()->LastErrorValue = error;
++}
++
+ /* call a 32-bit window procedure */
+ static LRESULT call_window_proc( HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, LRESULT *result, void *arg )
+ {
+     WNDPROC proc = arg;
+-
++    LONG parent = 0, call;
++    UINT depth = 0;
++
++    call = qtk_caption_trace_begin( hwnd, msg, wp, lp, QTK_CAPTION_PASS, &parent, &depth );
+     TRACE_(relay)( "\1Call window proc %p (hwnd=%p,msg=%s,wp=%08Ix,lp=%08Ix)\n",
+                    proc, hwnd, SPY_GetMsgName(msg, hwnd), wp, lp );
+ 
+     *result = WINPROC_wrapper( proc, hwnd, msg, wp, lp );
++    qtk_caption_trace_end( call, parent, depth, hwnd, msg, *result, QTK_CAPTION_PASS );
+ 
+     TRACE_(relay)( "\1Ret  window proc %p (hwnd=%p,msg=%s,wp=%08Ix,lp=%08Ix) retval=%08Ix\n",
+                    proc, hwnd, SPY_GetMsgName(msg, hwnd), wp, lp, *result );
+@@ -699,8 +850,20 @@
+ {
+     DPI_AWARENESS_CONTEXT context = SetThreadDpiAwarenessContext( ULongToHandle( params->dpi_context ) );
+     LRESULT result = 0;
+-
+-    if (!params->ansi)
++    enum qtk_caption_action action = qtk_caption_action( params );
++
++    if (action != QTK_CAPTION_PASS)
++    {
++        LONG parent = 0, call;
++        UINT depth = 0;
++        call = qtk_caption_trace_begin( params->hwnd, params->msg, params->wparam, params->lparam,
++                                        action, &parent, &depth );
++        if (action == QTK_CAPTION_NATIVE)
++            result = params->ansi_dst ? DefWindowProcA( params->hwnd, params->msg, params->wparam, params->lparam ) :
++                                       DefWindowProcW( params->hwnd, params->msg, params->wparam, params->lparam );
++        qtk_caption_trace_end( call, parent, depth, params->hwnd, params->msg, result, action );
++    }
++    else if (!params->ansi)
+     {
+         if (params->procW == WINPROC_PROC16)
+             WINPROC_CallProcWtoA( wow_handlers.call_window_proc, params->hwnd, params->msg, params->wparam,
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -100,6 +100,10 @@
+ 
+ static const WCHAR whole_window_prop[] =
+     {'_','_','w','i','n','e','_','x','1','1','_','w','h','o','l','e','_','w','i','n','d','o','w',0};
++static const WCHAR qtk_native_placement_prop[] =
++    {'_','_','w','i','n','e','_','q','t','k','_','n','a','t','i','v','e','_','p','l','a','c','e','m','e','n','t',0};
++static const WCHAR qtk_caption_move_prop[] =
++    {'_','_','w','i','n','e','_','q','t','k','_','n','a','t','i','v','e','_','c','a','p','t','i','o','n','_','m','o','v','e',0};
+ static const WCHAR clip_window_prop[] =
+     {'_','_','w','i','n','e','_','x','1','1','_','c','l','i','p','_','w','i','n','d','o','w',0};
+ static const WCHAR focus_time_prop[] =
+@@ -1283,6 +1287,31 @@
+            data->whole_window && data->whole_window != root_window && !is_virtual_desktop();
+ }
+ 
++/* These server properties carry the current XID, not a truthy stale flag.
++ * The PE policy additionally checks the application role before bypassing it. */
++static BOOL use_native_caption_move( const struct x11drv_win_data *data )
++{
++    const char *value = getenv( "QTK_NATIVE_CAPTION_MOVE" );
++
++    return value && !strcmp( value, "1" ) && use_native_window_placement( data );
++}
++
++static void set_native_caption_prop( HWND hwnd, const WCHAR *name, HANDLE value )
++{
++    if (NtUserGetProp( hwnd, name ) == value) return;
++    if (value) NtUserSetProp( hwnd, name, value );
++    else NtUserRemoveProp( hwnd, name );
++}
++
++static void sync_native_caption_props( struct x11drv_win_data *data )
++{
++    HANDLE whole = use_native_caption_move( data ) ? (HANDLE)data->whole_window : 0;
++    HANDLE movable = whole && is_net_supported( x11drv_atom(_NET_WM_MOVERESIZE) ) ? whole : 0;
++
++    set_native_caption_prop( data->hwnd, qtk_native_placement_prop, whole );
++    set_native_caption_prop( data->hwnd, qtk_caption_move_prop, movable );
++}
++
+ static void window_set_net_wm_fullscreen_monitors( struct x11drv_win_data *data, const struct monitor_indices *new_monitors )
+ {
+     const struct monitor_indices *old_monitors = &data->pending_state.monitors;
+@@ -1690,6 +1719,7 @@
+     window_set_wm_state( data, WithdrawnState, FALSE ); /* no WM_STATE is pending, requested immediately */
+ 
+     data->managed = new_managed;
++    sync_native_caption_props( data );
+     TRACE( "window %p/%lx, requesting override-redirect %u -> %u serial %lu\n", data->hwnd, data->whole_window,
+            !old_managed, !new_managed, NextRequest( data->display ) );
+     XChangeWindowAttributes( data->display, data->whole_window, CWOverrideRedirect, &attr );
+@@ -2152,6 +2182,7 @@
+     if (data->managed) WARN( "Window is already managed, should wait for WithdrawnState\n" );
+     else window_set_managed( data, TRUE );
+     data->embedded = TRUE;
++    sync_native_caption_props( data );
+     window_set_wm_state( data, NormalState, FALSE );
+ }
+ 
+@@ -2486,6 +2517,7 @@
+ 
+     XSaveContext( data->display, data->whole_window, winContext, (char *)data->hwnd );
+     NtUserSetProp( data->hwnd, whole_window_prop, (HANDLE)data->whole_window );
++    sync_native_caption_props( data );
+ 
+     /* set the window text */
+     if (!NtUserInternalGetWindowText( data->hwnd, text, ARRAY_SIZE( text ))) text[0] = 0;
+@@ -2515,6 +2547,9 @@
+ static void destroy_whole_window( struct x11drv_win_data *data, BOOL already_destroyed )
+ {
+     TRACE( "win %p xwin %lx/%lx\n", data->hwnd, data->whole_window, data->client_window );
++
++    set_native_caption_prop( data->hwnd, qtk_caption_move_prop, 0 );
++    set_native_caption_prop( data->hwnd, qtk_native_placement_prop, 0 );
+ 
+     if (!data->whole_window)
+     {
+@@ -2704,6 +2739,7 @@
+     data->whole_window = win;
+     window_set_managed( data, TRUE );
+     NtUserSetProp( data->hwnd, whole_window_prop, (HANDLE)win );
++    sync_native_caption_props( data );
+     set_initial_wm_hints( display, win );
+     if (is_desktop_fullscreen()) window_set_net_wm_state( data, (1 << NET_WM_STATE_FULLSCREEN) );
+     release_win_data( data );
+@@ -3683,7 +3719,12 @@
+         goto failed;
+     }
+ 
+-    if (NtUserGetWindowLongW( hwnd, GWL_STYLE ) & WS_MAXIMIZE) goto failed;
++    /* A supported native caption move lets the host unmaximize during the
++     * drag. Keep Wine's guard for keyboard moves and every sizing command. */
++    if ((NtUserGetWindowLongW( hwnd, GWL_STYLE ) & WS_MAXIMIZE) &&
++        !((wparam & 0xfff0) == SC_MOVE && hittest == HTCAPTION &&
++          use_native_caption_move( data ) &&
++          NtUserGetProp( hwnd, qtk_caption_move_prop ) == (HANDLE)data->whole_window)) goto failed;
+ 
+     if (!is_net_supported( x11drv_atom(_NET_WM_MOVERESIZE) ))
+     {

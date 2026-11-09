@@ -1,0 +1,86 @@
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1272,9 +1272,22 @@
+                           32, PropModeReplace, (unsigned char *)&time, 1 );
+ }
+ 
++/* In this opt-in direct-host mode the native WM owns fullscreen placement.
++ * Keep Wine's coordinate/style translation, including data->is_fullscreen for
++ * resizability, but do not infer a host fullscreen request from window bounds. */
++static BOOL use_native_window_placement( const struct x11drv_win_data *data )
++{
++    const char *value = getenv( "QTK_NATIVE_WINDOW_PLACEMENT" );
++
++    return value && !strcmp( value, "1" ) && data->managed && !data->embedded &&
++           data->whole_window && data->whole_window != root_window && !is_virtual_desktop();
++}
++
+ static void window_set_net_wm_fullscreen_monitors( struct x11drv_win_data *data, const struct monitor_indices *new_monitors )
+ {
+     const struct monitor_indices *old_monitors = &data->pending_state.monitors;
++
++    if (use_native_window_placement( data )) return; /* monitor choice belongs to the native WM */
+     data->desired_state.monitors = *new_monitors;
+ 
+     if (!(data->pending_state.net_wm_state & (1 << NET_WM_STATE_FULLSCREEN)) || is_virtual_desktop()) return; /* window isn't fullscreen, delay updating */
+@@ -1322,6 +1335,8 @@
+ {
+     struct monitor_indices monitors = {0};
+ 
++    if (use_native_window_placement( data )) return;
++
+     /* If the current display device handler cannot detect dynamic device changes, do not use
+      * _NET_WM_FULLSCREEN_MONITORS because xinerama_get_fullscreen_monitors() may report wrong
+      * indices because of stale xinerama monitor information */
+@@ -1333,8 +1348,16 @@
+ static void window_set_net_wm_state( struct x11drv_win_data *data, UINT new_state )
+ {
+     UINT i, count, old_state = data->pending_state.net_wm_state;
++    BOOL native_placement = use_native_window_placement( data );
+ 
+     new_state &= x11drv_init_thread_data()->net_wm_state_mask;
++    if (native_placement)
++    {
++        /* Preserve fullscreen selected by the host, including its removal.
++         * Never send a competing geometry-derived ADD or REMOVE request. */
++        new_state &= ~(1 << NET_WM_STATE_FULLSCREEN);
++        new_state |= data->current_state.net_wm_state & (1 << NET_WM_STATE_FULLSCREEN);
++    }
+     data->desired_state.net_wm_state = new_state;
+     if (data->state_locks) return; /* win32 state is being updated, delay the change */
+     if (!data->whole_window || !data->managed || data->embedded) return; /* no window or not managed, nothing to update */
+@@ -1385,6 +1408,7 @@
+         for (i = 0; i < NB_NET_WM_STATES; i++)
+         {
+             if (data->net_wm_state_serial) break; /* another _NET_WM_STATE update is pending, wait for it to complete */
++            if (native_placement && i == NET_WM_STATE_FULLSCREEN) continue;
+             if (!((old_state ^ new_state) & (1 << i))) continue;
+ 
+             xev.xclient.data.l[0] = (new_state & (1 << i)) ? _NET_WM_STATE_ADD : _NET_WM_STATE_REMOVE;
+@@ -1487,7 +1511,7 @@
+ 
+     style = NtUserGetWindowLongW( data->hwnd, GWL_STYLE );
+     if (style & WS_MINIMIZE) new_state |= data->desired_state.net_wm_state & fullscreen_mask;
+-    if (data->is_fullscreen)
++    if (data->is_fullscreen && !use_native_window_placement( data ))
+     {
+         if ((style & WS_MAXIMIZE) && (style & WS_CAPTION) == WS_CAPTION)
+             new_state |= (1 << NET_WM_STATE_MAXIMIZED);
+@@ -1719,7 +1743,7 @@
+ 
+     if (new_style & WS_MINIMIZE) return 0; /* window is still minimized, don't change maximized state */
+ 
+-    if ((old_style & WS_CAPTION) == WS_CAPTION || !data->is_fullscreen)
++    if ((old_style & WS_CAPTION) == WS_CAPTION || !data->is_fullscreen || use_native_window_placement( data ))
+     {
+         if ((new_style & WS_MAXIMIZE) && !(old_style & WS_MAXIMIZE))
+         {
+@@ -1758,7 +1782,7 @@
+      * rect. If the application sets a visible rect slightly larger than the monitor rect and insists
+      * on changing to the rect that it previously set when the rect is changed by the WM, then the
+      * window rect will be repeatedly changed by the WM and the application, causing a flickering effect */
+-    if (data->is_fullscreen)
++    if (data->is_fullscreen && !use_native_window_placement( data ))
+     {
+         if (xinerama_get_fullscreen_monitors( &data->rects.visible, &old_generation, old_monitors )
+             && xinerama_get_fullscreen_monitors( &data->current_state.rect, &generation, monitors )

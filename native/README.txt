@@ -206,6 +206,18 @@ stability acceptance is implied. There is no 0008 dependency. Published prebuilt
 runtime/source-companion archives remain unchanged; only new source builds include
 0009. Preserve complete manifest checks and normally stopped deployment guards.
 
+Native window authority source checkpoint
+
+Wine patches 0010 and 0011 are experimental and disabled unless their exact opt-in
+variables are set. 0010 changes the X11 fullscreen-placement policy; 0011 changes
+both PE user32 and the X11 driver for selected caption moves. KNOWN REGRESSION:
+0011 can bypass custom fullscreen/minimize/maximize/close controls that report
+HTCAPTION. A distinct HTCLOSE fixture does not prove those custom controls work.
+Do not enable 0011 for normal use or describe this checkpoint as production ready.
+See ../docs/NATIVE-WINDOW-AUTHORITY.md for source scope, opt-in/trace parameters,
+matching-runtime requirements and validation limits. Published runtime archives
+are unchanged. This source checkpoint does not include an installation deployer.
+
 Validation boundaries
 
 The source preparation checks and offline unit tests establish archive integrity,

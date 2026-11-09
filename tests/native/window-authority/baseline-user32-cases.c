@@ -1,0 +1,6 @@
+/* Original toolkit test boundary/cases; MIT license, see repository LICENSE. */
+#define CHECK(x) do{assertions++;if(!(x)){fprintf(stderr,"FAIL baseline case=%u line=%u: %s\n",cases,__LINE__,#x);exit(1);}}while(0)
+static LRESULT application(HWND h,UINT m,WPARAM w,LPARAM l){(void)h;(void)l;app_calls++;if(m==161&&w==2)group_arms++;teb.LastErrorValue=66;return 88;}
+static unsigned custom_button_activations;
+static LRESULT custom_caption_application(HWND h,UINT m,WPARAM w,LPARAM l){(void)h;if(m==161&&w==2&&l==1234)custom_button_activations++;return 88;}
+int main(void){struct win_proc_params p;unsigned i;for(i=0;i<4;i++){cases++;app_calls=group_arms=dwp_a=dwp_w=0;dpi=(HANDLE)11;move_option=L"1";trace_option=L"1";p=(struct win_proc_params){(HWND)1,161,2,0,application,application,application,22,i&1,(i>>1)&1,0};CHECK(dispatch_win_proc_params(&p)==88);CHECK(app_calls==1&&group_arms==1&&!dwp_a&&!dwp_w);CHECK(dpi==(HANDLE)11&&teb.LastErrorValue==66);}cases++;p.ansi=p.ansi_dst=0;p.procW=custom_caption_application;p.lparam=1234;CHECK(dispatch_win_proc_params(&p)==88&&custom_button_activations==1);CHECK(trace_lines==0);printf("baseline user32 actual-function cases=%u assertions=%u PASS\n",cases,assertions);return 0;}

@@ -43,6 +43,14 @@
         {
           "path": "patches/wine/0009-winex11-preserve-minimized-preview.patch",
           "sha256": "c0a85a17b9a06e4694b336661017961cf34819685fde1b3ac3abe0642ba108a8"
+        },
+        {
+          "path": "patches/wine/0010-winex11-native-window-placement.patch",
+          "sha256": "6d1584b668ed0673af998c39c1783b972581fd53cfea6d018f67b3d6d97df33c"
+        },
+        {
+          "path": "patches/wine/0011-native-caption-move.patch",
+          "sha256": "a80bc33d8b7ac6330984ad2f70491a03840b235e62e89fbce1617386bd142f25"
         }
       ],
       "license": "LGPL-2.1-or-later",

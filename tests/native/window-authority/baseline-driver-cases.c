@@ -1,0 +1,3 @@
+/* Original toolkit test boundary/cases; MIT license, see repository LICENSE. */
+#define CHECK(x) do{assertions++;if(!(x)){fprintf(stderr,"FAIL baseline driver line=%u: %s\n",__LINE__,#x);exit(1);}}while(0)
+int main(void){POINT p={11,22};data=(struct x11drv_win_data){(HWND)1,100,TRUE,FALSE,{NormalState}};style=WS_THICKFRAME;setenv("QTK_NATIVE_WINDOW_PLACEMENT","1",1);setenv("QTK_NATIVE_CAPTION_MOVE","1",1);cases++;CHECK(X11DRV_SysCommand(data.hwnd,SC_MOVE+HTCAPTION,0,&p)==0&&moves==1&&last_dir==8);moves=0;style|=WS_MAXIMIZE;cases++;CHECK(X11DRV_SysCommand(data.hwnd,SC_MOVE+HTCAPTION,0,&p)==-1&&!moves);printf("baseline driver actual-function cases=%u assertions=%u PASS\n",cases,assertions);return 0;}
