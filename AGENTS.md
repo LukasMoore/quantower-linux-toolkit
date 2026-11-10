@@ -63,6 +63,13 @@ Read README.md for installation and THIRD_PARTY.md for licensing boundaries.
   deployment verification. Preserve the adapter lock, fresh snapshot comparison
   and normal front-door revalidation; cancellation/errors never authorize a start.
   Never rewrite failed history or infer inactivity from summary status.
+- `interrupted_session.py` adds optional explicit-Open reconciliation for structured
+  interrupted integrated histories. Require exact latest/history bytes and a valid
+  matching private ledger, repeat full prefix/recorded-birth/shared-runtime inactivity
+  and deployment verification under two fresh launch locks, and compare fingerprints.
+  Stale PIDs or cleanup flags never prove current inactivity. Preserve adapter action
+  locking, recovery-only behavior and normal one-shot front-door checks. No cleanup,
+  signals, history edits, automatic receipt creation or retries belong in this policy.
 - Apply explicit DPI only through `prepare(..., wine_dpi=...)` under the existing
   inactive-prefix/shared-lock gates. Do not alter vendor awareness or signed files.
 - Offline and own-fixture passes do not prove physical multi-monitor behavior. Keep

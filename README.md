@@ -211,7 +211,14 @@ python3 doctor.py
 ```
 
 Launch through `launch.sh` for session locking and full diagnostics. The internal
-render helper is not the application entry point. Profile selection is explicit:
+render helper is not the application entry point. For a deliberate restart, close
+the application normally, allow cleanup to finish, then launch once. Optional
+desktop adapters can use the [interrupted-session policy](docs/INTEGRATED-WINDOWS.md#opening-after-an-interrupted-shutdown)
+to recheck a prior interrupted shutdown before accepting one explicit Open request.
+The public toolkit includes the policy module; an Open-or-Recover desktop frontend
+is not included. No background retry or automatic restart is enabled.
+
+Profile selection is explicit:
 
 ```bash
 python3 select-profile.py compatible

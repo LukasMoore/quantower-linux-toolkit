@@ -150,6 +150,60 @@ The policy never launches the app, changes a summary, cleans up processes or ret
 The portable regressions use synthetic summaries and mocked callbacks/GUI; they do
 not establish physical desktop behavior or resolve application shutdown hangs.
 
+## Opening after an interrupted shutdown
+
+An interrupted desktop shutdown can leave a failed summary with incomplete cleanup,
+an unconfirmed child exit and retained Starter PIDs. Abrupt power loss can leave a
+summary marked `running`. The strict finalized-failure policy above continues to
+refuse these records. Optional adapters can use `interrupted_session.py` to recheck
+them during an explicit Open request once the application is actually stopped.
+The old failure record stays intact. This does not establish why shutdown was
+interrupted or repair the application's shutdown behavior.
+
+`eligible(summary)` recognizes structured integrated histories only: a failed
+session with incomplete cleanup, or an unfinished running session with known
+monitor phases. It requires valid identity fields and timezone-aware timestamps.
+It does not authorize a start. Malformed records and very early startup records
+without a matching recorded child remain refused.
+
+`recognize(...)` and `validate_start(...)` accept these keyword arguments:
+
+- `app`: the canonical installation directory, supplied as a `Path`.
+- `inactive_lock`: the production context-manager callback described above. Each
+  entry must acquire the shared launch lock and prove exact-prefix, recorded-birth
+  and all canonical-runtime inactivity. Unknown or protected processes must refuse.
+  Run this with real desktop process visibility; an empty restricted PID namespace
+  cannot prove that a host application stopped.
+- `read_json`: a callback accepting one path, checking ownership, private regular
+  file metadata, path containment, symlink ancestors and bounded size before reading
+  JSON. Missing, redirected, unreadable or malformed files must raise.
+- `verify_deployment`: a no-argument callback verifying the complete selected
+  runtime and adapter configuration, returning a nonempty JSON-serializable dict
+  of stable deployment fingerprints. Do not include timestamps or random values.
+
+The module checks exact equal bytes in `logs/latest-session.json` and its matching
+`logs/sessions/<session-id>/summary.json`. It also validates and fingerprints
+`logs/session-processes.json`, binding its UID, prefix, token and recorded identities
+to the historical child and Starter PIDs. These historical fields never establish
+current process liveness. The callbacks supply the same guarded current inactivity
+and deployment checks used by the installation's normal maintenance path.
+
+`recognize(...)` returns `inactive-interrupted` after one guarded verification.
+During an explicit Open, `validate_start(...)` repeats the snapshot and deployment
+checks under two fresh full inactivity locks, refusing any changes. It returns
+`True` or raises; it never launches, cleans up, signals, edits history, creates a
+receipt, asks a question or retries. Choosing Open can supply the explicit new-session
+choice without a second question. An adapter's separate operator-receipt policy
+can retain its own confirmation requirements.
+
+Hold the adapter's duplicate-action lock across classification, validation and one
+normal front-door request. Existing authenticated running sessions still use
+existing-window recovery; recovery-only actions never reach `validate_start` or a
+new launch. The one-shot launcher must repeat its own production guards after this
+policy returns. A concurrent start or any refusal ends that Open request without a
+retry. This optional API does not add an Open-or-Recover frontend to the public
+toolkit or change `launch.sh` behavior. Published runtime assets are unchanged.
+
 ## DPI and acceptance limits
 
 Physical scanout, desktop logical coordinates, X11 backing pixels, Win32 virtualized

@@ -2,6 +2,10 @@
 
 ## Unreleased — experimental source checkpoint
 
+- Add an optional desktop-adapter policy for one explicit Open after an interrupted
+  integrated session. Repeat full inactivity/deployment guards and compare exact
+  history/ownership snapshots without rewriting the previous failure or retrying.
+  Include the module in new source installations and add isolated regressions.
 - Add default-off Wine 0010 native fullscreen-placement policy and 0011 caption-move
   policy to the pinned source recipe. Existing published runtime assets are unchanged.
 - **Known 0011 regression:** custom fullscreen, minimize, maximize and close controls
