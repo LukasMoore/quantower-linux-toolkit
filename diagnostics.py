@@ -31,6 +31,21 @@ SESSION_BYTES = 100 * 1024 * 1024
 LINE_BYTES = 8192
 DEFAULT_WINEDEBUG = '-all,err+all,warn+all'
 ANSI = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
+WINE_MESSAGE = re.compile(
+    r'^\s*(?:\d+\.\d+:)?(?:[0-9a-fA-F]+:)*'
+    r'(?P<level>err|warn|fixme|trace):(?P<channel>[^:\s]+):(?P<function>[^\s]+)(?:\s+|$)')
+FILE_LOOKUP_MISS = re.compile(r'L"[^\r\n]*" not found \((c0000034|c000003a)\)')
+FILE_LOOKUP_FUNCTIONS = ('NtCreateFile', 'NtQueryFullAttributesFile', 'NtQueryAttributesFile')
+FILE_LOOKUP_STATUSES = ('c0000034', 'c000003a')
+FILE_LOOKUP_REPORT_SECONDS = 60
+FATAL_MESSAGE = re.compile(
+    r'\bfatal error\b|\bassertion\b[^\r\n]*\bfailed\b|\bunhandled exception\b|'
+    r'\bfailfast\b|\bVK_ERROR_DEVICE_LOST\b|\bsegmentation fault\b', re.IGNORECASE)
+
+
+def file_lookup_counters():
+    # Fixed keys keep memory bounded even when every lookup uses a new path.
+    return {function: dict.fromkeys(FILE_LOOKUP_STATUSES, 0) for function in FILE_LOOKUP_FUNCTIONS}
 
 
 def utc_now():
@@ -130,6 +145,9 @@ class SessionLog:
         self.output_bytes = 0
         self.last_output_at = None
         self.runtime_levels = dict(INFO=0, WARNING=0, ERROR=0)
+        self.file_lookup_counts = file_lookup_counters()
+        self.file_lookup_reported_counts = file_lookup_counters()
+        self.file_lookup_next_report = time.monotonic() + FILE_LOOKUP_REPORT_SECONDS
         self.summary_failures = 0
         self.thread = threading.Thread(target=self._pump, name='quantower-output', daemon=True)
         self.thread.start()
@@ -203,6 +221,7 @@ class SessionLog:
                     if pending and time.monotonic() - last_data >= 1:
                         self._runtime_line(pending)
                         pending = b''
+                    self._flush_file_lookup_probes()
                     if self.stop_reader.is_set():
                         break
                     self.stop_reader.wait(0.1)
@@ -218,6 +237,7 @@ class SessionLog:
                     length = newline + 1 if newline >= 0 else LINE_BYTES
                     self._runtime_line(pending[:length])
                     pending = pending[length:]
+                self._flush_file_lookup_probes()
                 if self.drain_deadline is not None and time.monotonic() >= self.drain_deadline:
                     self.drain_truncated = True
                     break
@@ -227,15 +247,61 @@ class SessionLog:
             self.reader_failed = True
             self.event('output_reader_failed', 'Runtime output reader failed.', level='ERROR', exception=True)
         finally:
+            self._flush_file_lookup_probes(force=True)
             self.reader.close()
 
     def _runtime_line(self, data):
         text = data.decode('utf-8', errors='replace').rstrip('\n')
-        lowered = ANSI.sub('', text).lower()
-        level = ('ERROR' if any(word in lowered for word in ('err:', 'error', 'fatal', 'assertion failed'))
-                 else 'WARNING' if 'warn' in lowered else 'INFO')
+        clean = ANSI.sub('', text)
+        message = WINE_MESSAGE.match(clean)
+        # These statuses describe a failed candidate lookup, not a failed load.
+        # Keep all original lines in runtime.raw.log and show one sample for each
+        # function/status. Access denied and all other file warnings stay visible.
+        if (message and message['level'] == 'warn' and message['channel'] == 'file'
+                and message['function'] in self.file_lookup_counts):
+            miss = FILE_LOOKUP_MISS.fullmatch(clean[message.end():])
+            if miss:
+                counts = self.file_lookup_counts[message['function']]
+                counts[miss[1]] += 1
+                self.runtime_levels['INFO'] += 1
+                if counts[miss[1]] == 1:
+                    self.text('File lookup probe (repeats counted; full output in runtime.raw.log): ' + text,
+                              'INFO', source='runtime')
+                return
+        if FATAL_MESSAGE.search(clean):
+            level = 'ERROR'
+        elif message:
+            # Wine's class is more precise than words inside a DLL/file name.
+            level = {'err': 'ERROR', 'warn': 'WARNING'}.get(message['level'], 'INFO')
+        else:
+            lowered = clean.lower()
+            level = ('ERROR' if any(word in lowered for word in (
+                'err:', 'error', 'fatal', 'assertion failed', 'access violation'))
+                     else 'WARNING' if 'warn' in lowered else 'INFO')
         self.runtime_levels[level] += 1
         self.text(text, level, source='runtime')
+
+    def _file_lookup_snapshot(self):
+        return {function: dict(counts) for function, counts in self.file_lookup_counts.items()}
+
+    def _flush_file_lookup_probes(self, *, force=False):
+        # Only the reader updates/report these counters, including its final drain.
+        now = time.monotonic()
+        if not force and now < self.file_lookup_next_report:
+            return
+        self.file_lookup_next_report = now + FILE_LOOKUP_REPORT_SECONDS
+        counts = self._file_lookup_snapshot()
+        delta = {function: {status: count - self.file_lookup_reported_counts[function][status]
+                            for status, count in values.items()}
+                 for function, values in counts.items()}
+        probe_count = sum(sum(values.values()) for values in delta.values())
+        if probe_count:
+            self.event('file_lookup_probes',
+                       f'Grouped {probe_count} file/path-not-found lookup probes since the previous report; '
+                       'all original lines remain in runtime.raw.log.',
+                       probe_count=probe_count, probe_counts=delta,
+                       total_probe_count=sum(sum(values.values()) for values in counts.values()))
+            self.file_lookup_reported_counts = counts
 
     def _save(self):
         self.record['updated_at'] = utc_now()
@@ -258,7 +324,8 @@ class SessionLog:
         self.record.update(fields)
         self.record['uptime_seconds'] = round(time.monotonic() - self.started, 1)
         self.record.update(output_bytes=self.output_bytes, last_output_at=self.last_output_at,
-                           output_reader_failed=self.reader_failed, runtime_line_counts=dict(self.runtime_levels))
+                           output_reader_failed=self.reader_failed, runtime_line_counts=dict(self.runtime_levels),
+                           runtime_file_lookup_probes=self._file_lookup_snapshot())
         self.event('heartbeat', 'Supervisor is monitoring the session.', **fields,
                    uptime_seconds=self.record['uptime_seconds'], output_bytes=self.output_bytes,
                    last_output_at=self.last_output_at, output_reader_failed=self.reader_failed)
@@ -308,6 +375,7 @@ class SessionLog:
                            output_reader_failed=self.reader_failed,
                            output_bytes=self.output_bytes, last_output_at=self.last_output_at,
                            runtime_line_counts=dict(self.runtime_levels),
+                           runtime_file_lookup_probes=self._file_lookup_snapshot(),
                            logging_write_failures=sum(h.failures for h in self.handlers))
         if self.record.get('cleanup_complete') is True:
             self.record['starter_pids'] = []
