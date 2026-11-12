@@ -104,8 +104,9 @@ A background reader follows merged child stdout/stderr in an append-only regular
 file, including Wine, gamescope, DXVK and cleanup commands. Mirrored lines receive
 UTC timestamps, session ID, source and inferred severity. ANSI escapes are removed;
 invalid UTF-8 is replaced and long/no-newline output is split into 8 KiB chunks.
-Wine-prefixed lines use their declared class. Explicit fatal markers are logged as
-errors. Severity for other runtime lines is inferred from their text.
+Wine-prefixed lines use their declared class; explicit fatal markers are errors.
+Other runtime severity is a text heuristic, not an authoritative application-error
+classification.
 Python stdout/stderr are captured too. Children write to `runtime.raw.log`, not a
 supervisor-owned pipe: a surviving process can keep writing after supervision exits
 without a broken pipe or SIGPIPE. Preserve this design.
@@ -128,15 +129,17 @@ without a broken pipe or SIGPIPE. Preserve this design.
 | `logs/gpu/`, `logs/native-assert/` | Legacy diagnostic locations, if present |
 | `logs/support/*.tar.gz` | Explicit local support archives; inspect before sharing |
 
-The readable log groups Wine `warn:file` candidate lookups from `NtCreateFile`,
-`NtQueryFullAttributesFile` and `NtQueryAttributesFile` that end in `not found`
-with status `c0000034` or `c000003a`. It shows one INFO sample per function and
-status, with numeric `file_lookup_probes` events at most once per minute and a
-final report for any remaining probes. Every original line stays in the
-append-only `runtime.raw.log`. Session summaries include these counts under
-`runtime_file_lookup_probes` and include each probe as INFO in
-`runtime_line_counts`. File access-denied messages, cache and disk warnings,
-other statuses, Wine errors and fatal markers remain visible.
+The readable log groups exact Wine `warn:file` candidate lookups from `NtCreateFile`,
+`NtQueryFullAttributesFile` and `NtQueryAttributesFile` ending in `not found` with
+status `c0000034` or `c000003a`. It shows one INFO sample per function/status and
+numeric `file_lookup_probes` events at most once per minute, plus a final report
+for any remaining probes. Every original line remains in the append-only
+`runtime.raw.log`. Summaries record these raw probe counts separately under
+`runtime_file_lookup_probes`; they also count as INFO in `runtime_line_counts`,
+whose counts describe input lines rather than the number of mirrored entries.
+This grouping does not establish that a missing file is optional or repair a
+failed dependency load. File access-denied, cache/disk warnings, other statuses,
+Wine errors and fatal markers remain visible.
 
 Wrapper timestamps are UTC. Vendor timestamps can use their own convention.
 Status describes the launcher: `running`, `finished` (exit 0), or `failed` (nonzero).
